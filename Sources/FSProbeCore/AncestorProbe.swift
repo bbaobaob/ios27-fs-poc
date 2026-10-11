@@ -180,9 +180,17 @@ public enum AncestorProbe {
         return result
     }
 
+    /// Parent of a path, computed by hand.
+    ///
+    /// `URL.deletingLastPathComponent()` is not usable here: for the filesystem
+    /// root it yields "/.." on some platforms, which makes the walk climb into
+    /// "/../.." forever instead of terminating. Splitting the path explicitly
+    /// terminates at the root on every platform.
     private static func parentPath(of path: String) -> String {
-        let url = URL(fileURLWithPath: normalize(path))
-        let parent = url.deletingLastPathComponent().path
-        return normalize(parent)
+        let normalized = normalize(path)
+        if normalized == "/" { return "/" }
+        let components = normalized.split(separator: "/", omittingEmptySubsequences: true)
+        guard components.count > 1 else { return "/" }
+        return "/" + components.dropLast().joined(separator: "/")
     }
 }

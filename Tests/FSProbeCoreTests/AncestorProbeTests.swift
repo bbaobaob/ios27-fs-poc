@@ -102,3 +102,26 @@ final class AncestorProbeTests: XCTestCase {
         XCTAssertEqual(before, after, "the ascent probe must not modify the tree")
     }
 }
+
+// Regression: URL.deletingLastPathComponent() returns "/.." for the filesystem
+// root on some platforms, which made the walk climb into "/../.." forever. The
+// macOS runner caught this; the local verification host did not.
+extension AncestorProbeTests {
+    func testParentOfRootIsRoot() {
+        // Access the private helper through its observable effect: a walk that
+        // starts at the root must terminate immediately rather than emitting
+        // "/..", "/../..", and so on.
+        let steps = AncestorProbe.ascend(from: "/", maxDepth: 5)
+        XCTAssertEqual(steps.count, 1)
+        XCTAssertEqual(steps[0].path, "/")
+        XCTAssertEqual(steps[0].depth, 0)
+    }
+
+    func testWalkNeverEmitsDotDotPaths() {
+        let steps = AncestorProbe.ascend(from: "/tmp", maxDepth: 12)
+        for step in steps {
+            XCTAssertFalse(step.path.contains(".."), "ascent emitted a '..' path: \(step.path)")
+        }
+        XCTAssertEqual(steps.last?.path, "/")
+    }
+}
