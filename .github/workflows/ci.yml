@@ -26,21 +26,28 @@ jobs:
           xcode-select -p
           swift --version
 
-      - name: Build
-        run: swift build --build-tests -c release
+      - name: Build (release)
+        run: swift build -c release
 
-      - name: Test — direct XCTest bundle execution
-        timeout-minutes: 10
+      - name: Test
+        timeout-minutes: 25
         run: |
-          set -uo pipefail
-          BUNDLE="$(find .build -name 'FSProbePackageTests.xctest' -maxdepth 6 | head -1)"
-          echo "bundle: $BUNDLE"
-          EXEC="$BUNDLE/Contents/MacOS/FSProbePackageTests"
-          echo "exec: $EXEC"
-          ls -l "$EXEC" || true
-          # Run the XCTest bundle binary directly; a hung launch fails fast.
-          timeout 180 "$EXEC" 2>&1 | tee test-output.log
-          echo "exit=${PIPESTATUS[0]}"
+          set +e
+          # Strategy 1: SwiftPM test runner, debug configuration.
+          timeout 420 swift test 2>&1 | tee test-output.log
+          rc=${PIPESTATUS[0]}
+          echo "swift test rc=$rc"
+          if [ "$rc" -eq 0 ]; then exit 0; fi
+
+          # Strategy 2: xcodebuild, which uses a different test launch path.
+          echo "falling back to xcodebuild test"
+          timeout 600 xcodebuild test \
+            -scheme FSProbe \
+            -destination 'platform=macOS' \
+            -configuration Debug 2>&1 | tee xcodebuild-test.log
+          rc=${PIPESTATUS[0]}
+          echo "xcodebuild test rc=$rc"
+          exit "$rc"
 
       - name: Run harness on the macOS host
         run: |
@@ -65,5 +72,6 @@ jobs:
             matrix-host.json
             matrix-host.txt
             test-output.log
+            xcodebuild-test.log
           if-no-files-found: warn
           retention-days: 30
