@@ -78,6 +78,7 @@ extension POSIXShim {
         return path.withCString { cOpen($0, flags, mode) }
     }
 
+    @discardableResult
     public static func closeFile(_ fd: Int32) -> Int32 {
         return cClose(fd)
     }
@@ -98,6 +99,7 @@ extension POSIXShim {
         return cReaddir(dir)
     }
 
+    @discardableResult
     public static func closeDir(_ dir: OpaquePointer) -> Int32 {
         return cClosedir(dir)
     }
@@ -128,6 +130,7 @@ extension POSIXShim {
         }
     }
 
+    @discardableResult
     public static func unlinkFile(_ path: String) -> Int32 {
         return path.withCString { ptr in
             unlink(ptr)

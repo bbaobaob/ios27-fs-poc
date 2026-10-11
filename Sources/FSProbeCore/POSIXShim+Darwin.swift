@@ -5,18 +5,24 @@
 //  This is the implementation that runs on iOS 27 and macOS. Each wrapper is a
 //  direct pass-through; no behavior is altered.
 //
+//  Note on `open`: the Darwin importer marks `open` as an unavailable variadic
+//  shim, so it is bound by symbol name. The symbol is the documented libc
+//  function from <fcntl.h>; only the Swift import path is avoided.
+//
 
 #if canImport(Darwin)
 import Darwin
 
 extension POSIXShim {
 
+    @_silgen_name("open")
+    private static func cOpen(_ path: UnsafePointer<CChar>, _ flags: Int32, _ mode: UInt32) -> Int32
+
     public static func openFile(_ path: String, _ flags: Int32, _ mode: UInt32) -> Int32 {
-        return path.withCString { ptr in
-            open(ptr, flags, mode)
-        }
+        return path.withCString { cOpen($0, flags, mode) }
     }
 
+    @discardableResult
     public static func closeFile(_ fd: Int32) -> Int32 {
         return close(fd)
     }
@@ -41,6 +47,7 @@ extension POSIXShim {
         return OpaquePointer(entry)
     }
 
+    @discardableResult
     public static func closeDir(_ dir: OpaquePointer) -> Int32 {
         return closedir(UnsafeMutablePointer<DIR>(dir))
     }
@@ -67,6 +74,7 @@ extension POSIXShim {
         }
     }
 
+    @discardableResult
     public static func unlinkFile(_ path: String) -> Int32 {
         return path.withCString { ptr in
             unlink(ptr)

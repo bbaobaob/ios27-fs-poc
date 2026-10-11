@@ -9,6 +9,9 @@
 //
 
 import Foundation
+#if canImport(Darwin)
+import Darwin
+#endif
 import FSProbeCore
 
 struct Options {
