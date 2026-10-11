@@ -111,7 +111,7 @@ public struct CapabilityMatrix: Sendable {
             if let read = perPath[.readFile], read.succeeded,
                let enumerate = perPath[.enumerate], !enumerate.succeeded {
                 found.append(Discrepancy(
-                    path: result.path,
+                    path: result.targetPath,
                     description: "File readable but target directory enumeration failed (\(enumerate.errnoName ?? "?")). Read-without-enumeration discrepancy."
                 ))
             }
@@ -121,16 +121,20 @@ public struct CapabilityMatrix: Sendable {
             if let enumerate = perPath[.enumerate], enumerate.succeeded,
                let open = perPath[.openDirectory], !open.succeeded {
                 found.append(Discrepancy(
-                    path: result.path,
+                    path: result.targetPath,
                     description: "Enumeration succeeded but opendir failed (\(open.errnoName ?? "?")). Inconsistent directory access."
                 ))
             }
 
-            // 3. Writable but not readable, or vice versa — asymmetric access.
+            // 3. Writable but not readable — asymmetric access.
+            //    Reading a *directory* with open+read legitimately fails with
+            //    EISDIR, so this check only applies to non-directory targets.
             if let write = perPath[.writeFile], write.succeeded,
-               let read = perPath[.readFile], !read.succeeded {
+               let read = perPath[.readFile], !read.succeeded,
+               let stat = perPath[.stat], stat.succeeded,
+               stat.evidence.statIsDirectory != true {
                 found.append(Discrepancy(
-                    path: result.path,
+                    path: result.targetPath,
                     description: "Write succeeded but read failed (\(read.errnoName ?? "?")). Asymmetric access on the same path."
                 ))
             }
@@ -140,7 +144,7 @@ public struct CapabilityMatrix: Sendable {
             if let lstat = perPath[.stat], lstat.succeeded,
                let stat = perPath[.statFollow], !stat.succeeded {
                 found.append(Discrepancy(
-                    path: result.path,
+                    path: result.targetPath,
                     description: "lstat succeeded but stat failed (\(stat.errnoName ?? "?")). Symlink target not resolvable by this process."
                 ))
             }

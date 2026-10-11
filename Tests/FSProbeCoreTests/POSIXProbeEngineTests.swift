@@ -32,6 +32,12 @@ final class POSIXProbeEngineTests: XCTestCase {
         XCTAssertEqual(POSIXProbeEngine.run(.stat, on: dir).outcome, .succeeded)
         XCTAssertEqual(POSIXProbeEngine.run(.openDirectory, on: dir).outcome, .succeeded)
 
+        let stat = POSIXProbeEngine.run(.stat, on: dir)
+        XCTAssertEqual(stat.evidence.statIsDirectory, true)
+
+        let fileStat = POSIXProbeEngine.run(.stat, on: dir + "/file.txt")
+        XCTAssertEqual(fileStat.evidence.statIsDirectory, false)
+
         let enumerate = POSIXProbeEngine.run(.enumerate, on: dir, recordEntryNames: true)
         XCTAssertEqual(enumerate.outcome, .succeeded)
         // "." and ".." plus one real file

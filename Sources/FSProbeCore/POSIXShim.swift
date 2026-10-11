@@ -25,6 +25,11 @@ import Foundation
 
 /// Minimal stat result: only the fields the capability matrix records.
 public struct StatBuffer: Sendable {
+    /// `S_IFMT` — the file-type bits of st_mode.
+    public static let modeTypeMask: UInt32 = 0o170000
+    /// `S_IFDIR` — directory file type.
+    public static let modeDirectory: UInt32 = 0o040000
+
     public var size: Int64 = 0
     /// Full st_mode value (file type + permission bits).
     public var mode: UInt32 = 0

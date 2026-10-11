@@ -65,6 +65,33 @@ final class CapabilityMatrixTests: XCTestCase {
         }
     }
 
+    func testDirectoryTargetDoesNotProduceFalseAsymmetry() {
+        // Reading a directory with open+read legitimately fails with EISDIR.
+        // The analysis layer must not report that as an access asymmetry.
+        let matrix = CapabilityMatrix(
+            results: [
+                result("/dir", .stat, .succeeded, evidence: ProbeEvidence(statIsDirectory: true)),
+                result("/dir", .writeFile, .succeeded),
+                result("/dir", .readFile, .failedOther, errnoNumber: Int(EISDIR), errnoName: "EISDIR")
+            ],
+            environment: makeEnvironment()
+        )
+        XCTAssertTrue(matrix.discrepancies().isEmpty)
+    }
+
+    func testRegularFileAsymmetryIsStillFlagged() {
+        let matrix = CapabilityMatrix(
+            results: [
+                result("/file", .stat, .succeeded, evidence: ProbeEvidence(statIsDirectory: false)),
+                result("/file", .writeFile, .succeeded),
+                result("/file", .readFile, .deniedEPERM, errnoNumber: Int(EPERM), errnoName: "EPERM")
+            ],
+            environment: makeEnvironment()
+        )
+        XCTAssertEqual(matrix.discrepancies().count, 1)
+        XCTAssertTrue(matrix.discrepancies()[0].description.contains("Asymmetric access"))
+    }
+
     func testReadWithoutEnumerationIsFlagged() {
         let matrix = CapabilityMatrix(
             results: [

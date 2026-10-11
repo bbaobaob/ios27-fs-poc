@@ -77,7 +77,8 @@ public enum POSIXProbeEngine {
         if rc == 0 {
             let evidence = ProbeEvidence(
                 statSize: buffer.size,
-                statModeOctal: String(buffer.mode, radix: 8)
+                statModeOctal: String(buffer.mode, radix: 8),
+                statIsDirectory: (buffer.mode & StatBuffer.modeTypeMask) == StatBuffer.modeDirectory
             )
             return ProbeResult(
                 path: path,

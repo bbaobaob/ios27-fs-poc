@@ -66,6 +66,12 @@ public struct ProbeEvidence: Codable, Sendable, Equatable {
     public var statSize: Int64?
     /// File mode reported by stat (octal string, e.g. "100644").
     public var statModeOctal: String?
+    /// Whether stat reported the target as a directory.
+    ///
+    /// Used by the analysis layer: reading a *directory* with open+read
+    /// legitimately fails with EISDIR, which must not be reported as an
+    /// access asymmetry.
+    public var statIsDirectory: Bool?
 
     public init(
         entryCount: Int? = nil,
@@ -75,7 +81,8 @@ public struct ProbeEvidence: Codable, Sendable, Equatable {
         readBackMatched: Bool? = nil,
         linkTarget: String? = nil,
         statSize: Int64? = nil,
-        statModeOctal: String? = nil
+        statModeOctal: String? = nil,
+        statIsDirectory: Bool? = nil
     ) {
         self.entryCount = entryCount
         self.sampleEntryNames = sampleEntryNames
@@ -85,6 +92,7 @@ public struct ProbeEvidence: Codable, Sendable, Equatable {
         self.linkTarget = linkTarget
         self.statSize = statSize
         self.statModeOctal = statModeOctal
+        self.statIsDirectory = statIsDirectory
     }
 }
 

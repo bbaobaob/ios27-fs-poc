@@ -16,8 +16,8 @@ separately in `docs/device-validation-log.md`.
 | --- | --- | --- |
 | Environment / tooling | done | `gh` auth, Swift 6.4 verification host, public repo with macOS CI |
 | Research plan (hypotheses) | done | `docs/research-plan.md` |
-| Core probe harness | authored + unit-tested | `Sources/FSProbeCore`, 20 tests passing on the verification host |
-| macOS (Darwin) build + test | verified by CI | `.github/workflows/ci.yml` |
+| Core probe harness | authored + unit-tested | `Sources/FSProbeCore`, 22 tests passing on the macOS runner and the verification host |
+| macOS (Darwin) build + test | verified by CI (green) | `.github/workflows/ci.yml`, 22/22 tests on `macos-15` |
 | iOS app target | not yet implemented | tracked as next milestone |
 | Physical iPhone (iOS 27) validation | **not yet performed** | `docs/device-validation-log.md` records the blocker |
 
