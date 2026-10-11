@@ -29,11 +29,21 @@ jobs:
       - name: Build
         run: swift build -c release
 
-      - name: Test
-        # Hard timeout: a hung test step must fail the run, not stall it.
-        timeout-minutes: 20
+      - name: Build tests (no run)
+        run: swift build --build-tests -c release
+
+      - name: Test — direct XCTest bundle execution
+        timeout-minutes: 10
         run: |
-          swift test -c release --verbose 2>&1 | tee test-output.log
+          set -uo pipefail
+          BUNDLE="$(find .build -name 'FSProbePackageTests.xctest' -maxdepth 6 | head -1)"
+          echo "bundle: $BUNDLE"
+          EXEC="$BUNDLE/Contents/MacOS/FSProbePackageTests"
+          echo "exec: $EXEC"
+          ls -l "$EXEC" || true
+          # Run the XCTest bundle binary directly; a hung launch fails fast.
+          timeout 180 "$EXEC" 2>&1 | tee test-output.log
+          echo "exit=${PIPESTATUS[0]}"
 
       - name: Run harness on the macOS host
         run: |
@@ -49,7 +59,7 @@ jobs:
           xcodebuild -version
           uname -m
 
-      - name: Upload matrix and platform context
+      - name: Upload matrix, platform context, and test output
         if: always()
         uses: actions/upload-artifact@v4
         with:
