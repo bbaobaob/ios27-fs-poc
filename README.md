@@ -18,12 +18,13 @@ separately in `docs/device-validation-log.md`.
 | Research plan (hypotheses) | done | `docs/research-plan.md` |
 | Core probe harness | authored + unit-tested | `Sources/FSProbeCore`, 22 tests passing on the macOS runner and the verification host |
 | macOS (Darwin) build + test | verified by CI (green) | `.github/workflows/ci.yml`, 22/22 tests on `macos-15` |
-| iOS app target | not yet implemented | tracked as next milestone |
-| Physical iPhone (iOS 27) validation | **not yet performed** | `docs/device-validation-log.md` records the blocker |
+| iOS app target | builds and runs | `FSProbe.xcodeproj` (generated), `.github/workflows/ios.yml` |
+| iOS Simulator run (26.2) | done | matrix captured; app container baseline confirmed |
+| **iOS 27 physical device** | **blocked — not performed** | no iOS 27 runtime or Xcode release exists in this environment |
 
-Nothing in this repository has been validated on an iOS device yet. Results produced on the macOS
-runner are host results and are labelled as such; they are **not** presented as iOS device
-evidence.
+No iOS 27 result exists yet. The simulator runs are labelled with their runtime (18.5 and 26.2)
+and are **not** presented as iOS 27 evidence; the simulator's filesystem is the macOS host's, so it
+cannot answer any `/var/mobile` question at all.
 
 ## What the harness measures
 

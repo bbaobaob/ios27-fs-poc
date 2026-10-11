@@ -29,6 +29,20 @@ Xcode, and no physical iPhone attached**. Therefore:
 - No iOS device validation has been performed.
 - No claim about iOS 27 filesystem behaviour is made from host results.
 
+### Blocker: no iOS 27 build or runtime exists in this environment
+
+The free macOS runner image (`macos-15`, Xcode 16.4) ships iOS simulator runtimes **18.5 through
+26.2** and nothing newer. There is no iOS 27 simulator runtime, and no Xcode release on the runner
+that can target iOS 27. Consequences:
+
+- The newest iOS the harness has actually run on is **26.2** (simulator).
+- Every iOS result recorded here is explicitly labelled with its runtime.
+- **iOS 27 remains completely untested.** No statement in this repository should be read as a
+  statement about iOS 27.
+
+Clearing this blocker requires a Mac with an Xcode release that supports iOS 27, plus a physical
+iPhone running iOS 27. Neither is available here.
+
 ## Runs
 
 ### 2026-10-11 — macOS runner host (NOT a device)
@@ -56,3 +70,22 @@ Xcode, and no physical iPhone attached**. Therefore:
 ### iOS 27 physical device
 
 _Pending — to be filled in when a signed build can be installed on the target iPhone._
+
+### 2026-10-11 — iOS Simulator, runtime 26.2 (NOT a physical device)
+
+- Platform recorded by the app: iOS 26.2, build 24G830, simulator runtime 26.2 - 23C54, `arm64`.
+- Method: built by the `ios` workflow for `iphonesimulator`, installed with `simctl install`,
+  launched with `simctl launch`; the app computed the matrix on launch and wrote `matrix.json` /
+  `matrix.txt` into its Documents directory, which was extracted with
+  `simctl get_app_container ... data`.
+- Result: matrix captured and recorded in `docs/capability-matrix.md`. App container fully
+  accessible; `/var/mobile/...` reported `notFound` because those paths do not exist in the
+  simulator; `/var` write denied with `EACCES` (macOS host behaviour, not iOS).
+- Reproducibility: run twice (iOS 18.5 and iOS 26.2 runtimes) with identical results.
+- Limitations: **not iOS 27**, and **not a physical device**. The simulator's filesystem is the
+  macOS host's, so it cannot answer any `/var/mobile` question. The `/var` denial seen here is
+  macOS SIP, not the iOS sandbox, so it says nothing about whether iOS denies with `EPERM`.
+
+### iOS 27 on a physical iPhone
+
+_Pending — blocked: no iOS 27 runtime or Xcode release is available in this environment._

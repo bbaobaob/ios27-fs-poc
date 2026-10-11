@@ -84,6 +84,57 @@ passed, and every `/var/...` path correctly reported `ENOENT` because it does no
 
 ## iOS device result
 
-**Not yet collected.** The physical iPhone run is recorded in
-`docs/device-validation-log.md` with the exact iOS build, device model, signing context, per-target
-errno, and reproduction count. Until that record exists, no claim is made about iOS 27 behaviour.
+### iOS Simulator result (iOS 26.2 — NOT iOS 27)
+
+Captured by the `ios` workflow on the free macOS runner: the app was built for the simulator,
+installed, launched, and the matrix it wrote into its Documents directory was extracted. Platform
+recorded by the app itself: **iOS 26.2**, build 24G830 (simulator runtime 26.2 - 23C54), `arm64`.
+
+**Read this section with two caveats, because both limit what it can prove:**
+
+1. **This is not iOS 27.** The runner's Xcode 16.4 image provides iOS simulator runtimes 18.5
+   through 26.2 and nothing newer. There is no iOS 27 runtime available in this environment, so
+   iOS 27 behaviour is untested here.
+2. **The simulator's filesystem is the macOS host's filesystem.** The app container lives under
+   `/Users/runner/Library/Developer/CoreSimulator/Devices/<UDID>/data/Containers/Data/Application/<UUID>`,
+   not under `/var/mobile/Containers/...`. Consequently `/var/mobile` **does not exist** in the
+   simulator, and every `/var/mobile/...` cell is `notFound`. The `/var` and `/var/tmp` rows reflect
+   the macOS host filesystem, not iOS.
+
+```
+/Users/runner/.../Containers/Data/Application/<UUID>            succeeded    succeeded    succeeded    succeeded    failedOther  succeeded    succeeded    succeeded    failedOther
+/Users/runner/.../Containers/Data/Application/<UUID>/Documents   succeeded    succeeded    succeeded    succeeded    failedOther  succeeded    succeeded    succeeded    failedOther
+/Users/runner/.../Containers/Data/Application/<UUID>/Library     succeeded    succeeded    succeeded    succeeded    failedOther  succeeded    succeeded    succeeded    failedOther
+/Users/runner/.../Containers/Data/Application/<UUID>/tmp         succeeded    succeeded    succeeded    succeeded    failedOther  succeeded    succeeded    succeeded    failedOther
+/var                                                             succeeded    succeeded    succeeded    succeeded    failedOther  deniedEACCES deniedEACCES deniedEACCES succeeded
+/private/var                                                     succeeded    succeeded    succeeded    succeeded    failedOther  deniedEACCES deniedEACCES deniedEACCES failedOther
+/var/mobile                                                      notFound     notFound     notFound     notFound     notFound     notFound     notFound     notFound     notFound
+/var/mobile/Library                                              notFound     notFound     notFound     notFound     notFound     notFound     notFound     notFound     notFound
+/var/mobile/Library/Preferences                                  notFound     notFound     notFound     notFound     notFound     notFound     notFound     notFound     notFound
+/var/mobile/Containers                                           notFound     notFound     notFound     notFound     notFound     notFound     notFound     notFound     notFound
+/var/mobile/Containers/Data/Application                           notFound     notFound     notFound     notFound     notFound     notFound     notFound     notFound     notFound
+/var/mobile/Containers/Shared/AppGroup                           notFound     notFound     notFound     notFound     notFound     notFound     notFound     notFound     notFound
+/var/tmp                                                         succeeded    succeeded    succeeded    succeeded    failedOther  succeeded    succeeded    succeeded    failedOther
+```
+
+What this run **does** establish:
+
+- The harness runs end-to-end on real iOS userspace: it builds, installs, launches, computes the
+  matrix, and writes `matrix.json` / `matrix.txt` into the app container with no user interaction.
+- The app container behaves as the documented baseline predicts: full access to its own
+  `Documents`, `Library`, and `tmp`.
+- The result was identical on the iOS 18.5 and iOS 26.2 runtimes, i.e. this baseline is stable
+  across the versions available here.
+- The app log shows no crash; the only messages are ordinary simulator noise (a missing
+  `eligibility.plist` and `libCoreFSCache` cache invalidation).
+
+What it **cannot** establish, and must not be read as establishing:
+
+- Anything about `/var/mobile`, `/var/mobile/Library`, `/var/mobile/Containers/...`, or App Group
+  containers — those paths do not exist in the simulator.
+- Anything about iOS 27 specifically.
+- Whether iOS denies with `EPERM` (seatbelt) as opposed to the `EACCES` seen for `/var` here,
+  because the `/var` denial observed in the simulator comes from the macOS host.
+
+The `/var/mobile` investigation therefore requires the physical iPhone. See
+`docs/device-validation-log.md`.
