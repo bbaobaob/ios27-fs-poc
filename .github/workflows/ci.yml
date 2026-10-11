@@ -29,23 +29,30 @@ jobs:
       - name: Build (release)
         run: swift build -c release
 
+      # macOS has no `timeout` binary, so a hung test run is bounded by a shell
+      # watchdog with the step timeout as a backstop.
       - name: Test
         timeout-minutes: 25
         run: |
           set +e
-          # Strategy 1: SwiftPM test runner, debug configuration.
-          timeout 420 swift test 2>&1 | tee test-output.log
-          rc=${PIPESTATUS[0]}
+          rm -f test-output.log
+          swift test > test-output.log 2>&1 &
+          test_pid=$!
+          ( sleep 900; kill -9 "$test_pid" 2>/dev/null; echo "watchdog killed swift test after 900s" >> test-output.log ) &
+          watchdog_pid=$!
+          wait "$test_pid"
+          rc=$?
+          kill "$watchdog_pid" 2>/dev/null
+          cat test-output.log
           echo "swift test rc=$rc"
           if [ "$rc" -eq 0 ]; then exit 0; fi
 
-          # Strategy 2: xcodebuild, which uses a different test launch path.
-          echo "falling back to xcodebuild test"
-          timeout 600 xcodebuild test \
-            -scheme FSProbe \
-            -destination 'platform=macOS' \
-            -configuration Debug 2>&1 | tee xcodebuild-test.log
-          rc=${PIPESTATUS[0]}
+          echo "::group::xcodebuild test fallback"
+          xcodebuild test -scheme FSProbe -destination 'platform=macOS' \
+            -configuration Debug > xcodebuild-test.log 2>&1
+          rc=$?
+          tail -40 xcodebuild-test.log
+          echo "::endgroup::"
           echo "xcodebuild test rc=$rc"
           exit "$rc"
 
