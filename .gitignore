@@ -1,0 +1,13 @@
+# Build and test artefacts
+.build/
+.swiftpm/
+*.xcodeproj
+xcuserdata/
+DerivedData/
+
+# OS noise
+.DS_Store
+
+# Local run output
+matrix-*.json
+matrix-*.txt

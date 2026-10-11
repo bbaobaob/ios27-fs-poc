@@ -1,0 +1,58 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# Public repository: standard GitHub-hosted runners, including macOS, are free
+# for public repos. The macOS runner supplies the Xcode toolchain needed to
+# build the harness without a local Mac.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  core:
+    name: Build and test FSProbeCore (macOS runner)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: |
+          xcode-select -p
+          swift --version
+
+      - name: Build
+        run: swift build -c release
+
+      - name: Test
+        run: swift test -c release
+
+      - name: Run harness on the macOS host
+        run: |
+          .build/release/fsprobe-cli \
+            --label "macos-runner-host" \
+            --json matrix-host.json \
+            --text matrix-host.txt
+        continue-on-error: true
+
+      - name: Platform context (recorded with every host run)
+        run: |
+          sw_vers
+          xcodebuild -version
+          uname -m
+
+      - name: Upload matrix and platform context
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-host-matrix
+          path: |
+            matrix-host.json
+            matrix-host.txt
+          if-no-files-found: ignore
+          retention-days: 30
