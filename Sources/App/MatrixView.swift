@@ -853,6 +853,13 @@ struct PanelLabel: View {
     let text: String
     var tint: OutcomeFamily?
 
+    /// Positional text with an optional tint, so call sites read as
+    /// `PanelLabel("ERRNO", tint: .other)`.
+    init(_ text: String, tint: OutcomeFamily? = nil) {
+        self.text = text
+        self.tint = tint
+    }
+
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
@@ -904,12 +911,12 @@ extension OutcomeFamily {
         }
     }
 
-    static func from(_ outcome: ProbeOutcome) -> OutcomeFamily {
+    init(from outcome: ProbeOutcome) {
         switch outcome {
-        case .succeeded: return .success
-        case .deniedEPERM, .deniedEACCES: return .denial
-        case .notFound: return .absent
-        case .notDirectory, .failedOther: return .other
+        case .succeeded: self = .success
+        case .deniedEPERM, .deniedEACCES: self = .denial
+        case .notFound: self = .absent
+        case .notDirectory, .failedOther: self = .other
         }
     }
 
@@ -922,12 +929,12 @@ extension OutcomeFamily {
     ///     deniedEACCES sharing one in the matrix.
     ///   - `pathAbsent` is an absent path, never a refusal.
     ///   - `configurationIssue` / `unexplained` are neither, so "other".
-    static func from(_ cause: AccessCause) -> OutcomeFamily {
+    init(from cause: AccessCause) {
         switch cause {
-        case .documentedCapability, .userGranted: return .success
-        case .sandboxEnforcement, .posixPermissions: return .denial
-        case .pathAbsent: return .absent
-        case .configurationIssue, .unexplained: return .other
+        case .documentedCapability, .userGranted: self = .success
+        case .sandboxEnforcement, .posixPermissions: self = .denial
+        case .pathAbsent: self = .absent
+        case .configurationIssue, .unexplained: self = .other
         }
     }
 

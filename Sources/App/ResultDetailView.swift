@@ -244,10 +244,10 @@ private struct OperationResultCard: View {
 
     private func causeBlock(_ result: ProbeResult) -> some View {
         VStack(alignment: .leading, spacing: 3) {
-            PanelLabel("ATTRIBUTION", tint: OutcomeFamily.from(result.cause))
+            PanelLabel("ATTRIBUTION", tint: OutcomeFamily(from: result.cause))
             Text(result.cause.rawValue)
                 .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                .foregroundStyle(OutcomeFamily.from(result.cause).color(in: scheme))
+                .foregroundStyle(OutcomeFamily(from: result.cause).color(in: scheme))
             Text(result.cause.uiSummary)
                 .font(.system(size: 10.5))
                 .fixedSize(horizontal: false, vertical: true)
