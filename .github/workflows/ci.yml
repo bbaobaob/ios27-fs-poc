@@ -27,9 +27,6 @@ jobs:
           swift --version
 
       - name: Build
-        run: swift build -c release
-
-      - name: Build tests (no run)
         run: swift build --build-tests -c release
 
       - name: Test — direct XCTest bundle execution
