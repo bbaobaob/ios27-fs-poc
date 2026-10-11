@@ -18,6 +18,13 @@ concurrency:
   group: xtool-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  # The macOS xtool binary is a GUI app that checks this variable to decide
+  # whether it was invoked from the command line. Without it, xtool launches its
+  # UI and hangs forever on a headless runner. The Resources/bin/xtool wrapper
+  # script sets it too; both are set here so direct invocation is also safe.
+  XTL_CLI: "1"
+
 jobs:
   build:
     name: Build the app with xtool
@@ -53,7 +60,10 @@ jobs:
           # Files written by curl do not carry the quarantine attribute, but
           # clear it defensively so Gatekeeper cannot block execution.
           xattr -dr com.apple.quarantine xtool-extract/xtool.app 2>/dev/null || true
-          echo "XTOOL=$GITHUB_WORKSPACE/xtool-extract/xtool.app/Contents/MacOS/xtool" >> "$GITHUB_ENV"
+          # Use xtool's own wrapper script: it resolves the app bundle and sets
+          # XTL_CLI=1 before exec'ing the binary.
+          echo "XTOOL=$GITHUB_WORKSPACE/xtool-extract/xtool.app/Contents/Resources/bin/xtool" >> "$GITHUB_ENV"
+          ls -l "$GITHUB_WORKSPACE/xtool-extract/xtool.app/Contents/Resources/bin/"
 
       - name: Verify xtool runs
         timeout-minutes: 5
