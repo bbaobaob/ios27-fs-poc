@@ -64,6 +64,35 @@ jobs:
             | tee build-device.log
         timeout-minutes: 25
 
+      - name: Package unsigned IPA
+        run: |
+          set -euo pipefail
+          APP="$(find "$PWD/build/DerivedDataDevice" -name 'FSProbe.app' -maxdepth 5 | head -1)"
+          if [ -z "$APP" ]; then
+            echo "FSProbe.app was not produced by the device build" >&2
+            exit 1
+          fi
+          echo "App bundle: $APP"
+          ls -lh "$APP"
+
+          # Confirm we packaged the app we think we did.
+          echo "--- bundle identity ---"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Print :MinimumOSVersion' "$APP/Info.plist"
+
+          # An IPA is Payload/<App>.app at the archive root. ditto is the
+          # canonical packager: it preserves symlinks and resource forks, which
+          # zip -r does not.
+          rm -rf Payload FSProbe-unsigned.ipa
+          mkdir -p Payload
+          cp -R "$APP" Payload/
+          ditto -c -k --sequesterRsrc --keepParent "Payload/FSProbe.app" FSProbe-unsigned.ipa
+          ls -lh FSProbe-unsigned.ipa
+
+          echo "--- IPA contents (first 25 entries) ---"
+          unzip -l FSProbe-unsigned.ipa | head -30
+
       - name: Upload build logs
         if: always()
         uses: actions/upload-artifact@v4
@@ -72,6 +101,15 @@ jobs:
           path: |
             build.log
             build-device.log
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Upload the unsigned IPA
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: FSProbe-unsigned-ipa
+          path: FSProbe-unsigned.ipa
           if-no-files-found: warn
           retention-days: 30
 
