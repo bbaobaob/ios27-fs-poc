@@ -138,3 +138,89 @@ What it **cannot** establish, and must not be read as establishing:
 
 The `/var/mobile` investigation therefore requires the physical iPhone. See
 `docs/device-validation-log.md`.
+
+---
+
+## Experiment: directory ascent from the app container
+
+An original experiment added after the fixed target list, because the fixed list
+cannot express it: the ancestors of the app container are only known at runtime.
+Starting from a directory the process legitimately owns, the harness walks
+upwards one level at a time and probes each ancestor with **read-only**
+operations (`lstat`, `opendir`, `readdir`). It never creates, writes, or deletes
+in an ancestor, because ancestors of the app container are not authorized
+locations for this process.
+
+The question it answers is the one from the research plan: *why can an ordinary
+app read some files but fail to enumerate their parent directories?* Answering it
+requires probing the parents themselves.
+
+### Result on iOS 26.2 (Simulator) — recorded 2026-10-11
+
+```
+ 0 .../Devices/E952A9B0.../data/Containers/Data/Application/E0E9337D...  visible (7 entries)
+ 1 .../Devices/E952A9B0.../data/Containers/Data/Application               visible (145 entries)
+ 2 .../Devices/E952A9B0.../data/Containers/Data                           visible (6 entries)
+ 3 .../Devices/E952A9B0.../data/Containers                                visible (7 entries)
+ 4 .../Devices/E952A9B0.../data                                           visible (12 entries)
+ 5 .../Devices/E952A9B0...                                                visible (5 entries)
+ 6 .../Devices                                                            visible (135 entries)
+ 7 .../Library/Developer/CoreSimulator                                    visible (5 entries)
+```
+
+**Attribution, stated plainly: this is a Simulator result and it is not an iOS
+finding.** The iOS Simulator runs apps under a macOS seatbelt profile and shares
+the host filesystem; it does not implement the iOS container isolation model. The
+fact that depth 1 — the parent that on a device is `/var/mobile/Containers/Data/Application`
+— was enumerable with **145 entries** (i.e. 145 sibling app containers) is a
+property of the simulator, not of iOS.
+
+On a physical device this is the expected-to-be-denied case, and it is exactly
+what the device run must measure. Nothing here should be read as evidence that
+iOS permits cross-app container enumeration.
+
+### Control: the same ascent on the macOS host
+
+```
+ 0 /Users/runner  visible (41 entries)
+ 1 /Users         visible (5 entries)
+ 2 /              visible (23 entries)
+```
+
+The control confirms the mechanics on a third platform and shows the walk
+terminating correctly at the filesystem root.
+
+### Control: the same ascent on the verification host (Android/Termux)
+
+```
+ 0 <repo>            visible (15 entries)
+ 1 <home>            visible (24 entries)
+ 2 .../files         visible (5 entries)
+ 3 .../usr           visible (6 entries)
+ 4 /data/data        lstat=succeeded opendir=deniedEACCES readdir=deniedEACCES [EACCES]
+ 5 /data             lstat=succeeded opendir=deniedEACCES readdir=deniedEACCES [EACCES]
+ 6 /                 lstat=succeeded opendir=deniedEACCES readdir=deniedEACCES [EACCES]
+      stopped: boundary established after 3 consecutive not-fully-visible ancestors
+  boundary: first not-fully-visible ancestor is depth 4 (/data/data)
+```
+
+This is the shape of result the experiment is designed to produce: a clean
+boundary located relative to a known-good start, with the denying errno recorded.
+Note that here `lstat` succeeds while `opendir` is refused — precisely the
+"can see the name but not the contents" asymmetry the research plan asks about,
+and the reason the experiment records each operation independently.
+
+### The device question this leaves open
+
+On a physical iPhone the ascent starts at
+`/var/mobile/Containers/Data/Application/<UUID>` and the first four ancestors are
+the research targets themselves:
+
+| Depth | Path on device | Expected | Simulator showed |
+| --- | --- | --- | --- |
+| 1 | `/var/mobile/Containers/Data/Application` | denied | **visible, 145 entries** |
+| 2 | `/var/mobile/Containers/Data` | denied | visible |
+| 3 | `/var/mobile/Containers` | denied | visible |
+| 4 | `/var/mobile` | denied | not probed (walk reached maxDepth) |
+
+The simulator cannot answer any of these. The device run is required.
