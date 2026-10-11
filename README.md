@@ -88,6 +88,23 @@ The workflow builds the package in release mode, runs the unit tests, runs the h
 matrix, and uploads the matrix plus the platform context (`sw_vers`, `xcodebuild -version`) as an
 artifact.
 
+`ios.yml` additionally builds the iOS app target for both the simulator and a physical device,
+packages an **unsigned IPA** (`FSProbe-unsigned-ipa` artifact), and runs the app in an iOS Simulator
+to capture a matrix from real iOS userspace.
+
+### Getting the IPA onto a device
+
+The IPA is unsigned by necessity: CI has no Apple ID, so it is built with
+`CODE_SIGNING_ALLOWED=NO` and carries no `_CodeSignature`. It cannot be installed on a stock
+device as-is. To install it, sign it with a free personal Apple ID using one of:
+
+- **Xcode** — open `FSProbe.xcodeproj`, select your team, build and run on the device.
+- **AltStore / Sideloadly** — point either at the IPA and sign with your Apple ID.
+- **Apple Configurator** — after signing elsewhere.
+
+Once installed, the app computes the matrix on launch and writes `matrix.json` and `matrix.txt`
+into its Documents directory; the Export button shares both off the device.
+
 ## Originality
 
 All probe logic, result model, error classification, matrix analysis, discrepancy detection, CLI,

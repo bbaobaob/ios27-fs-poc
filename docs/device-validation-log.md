@@ -89,3 +89,24 @@ _Pending — to be filled in when a signed build can be installed on the target 
 ### iOS 27 on a physical iPhone
 
 _Pending — blocked: no iOS 27 runtime or Xcode release is available in this environment._
+
+### 2026-10-11 — unsigned IPA artifact (build only, never executed)
+
+- Produced by the `ios` workflow, job "Build FSProbe for iOS Simulator", step
+  "Package unsigned IPA", from the `Release-iphoneos` build (`CODE_SIGNING_ALLOWED=NO`).
+- Artifact: `FSProbe-unsigned-ipa` on the run.
+- Verified after download:
+  - Structure: `FSProbe.app/` at the archive root, containing `FSProbe` (executable),
+    `Info.plist`, `PkgInfo` (`APPL????`). This is the correct IPA layout.
+  - `Info.plist`: `CFBundleIdentifier = com.bbaobaob.fsprobe`,
+    `CFBundleShortVersionString = 1.0`, `MinimumOSVersion = 17.0`, `UIDeviceFamily = 1`,
+    `CFBundleSupportedPlatforms = iPhoneOS`.
+  - Executable: Mach-O 64-bit arm64, links `/usr/lib/dyld`, contains no
+    `/Library/Developer/CoreSimulator` path — a **device** binary, not a simulator slice.
+  - Contains the probe engine: the strings `fsprobe-writetest.tmp`, `kern.osversion`,
+    `matrix.json`, and the `fsprobe.capability-matrix.v1` schema tag are all present.
+- Limitations: **unsigned**. Built with `CODE_SIGNING_ALLOWED=NO`, so there is no
+  `_CodeSignature`. It cannot be installed on a stock device as-is. Installing requires a
+  signing step with an Apple ID (free personal accounts are sufficient for development
+  signing) using Xcode, AltStore, or Sideloadly.
+- The IPA has never been executed. Nothing in this entry is a runtime result.
