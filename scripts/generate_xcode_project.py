@@ -19,6 +19,7 @@ excluded: it is the command-line runner for CI, not part of the app.
 from __future__ import annotations
 
 import hashlib
+import re
 import os
 import sys
 from pathlib import Path
@@ -38,6 +39,20 @@ APP_DIR = ROOT / "Sources" / "App"
 def uid(seed: str) -> str:
     """Deterministic 24-hex-uppercase Xcode object identifier."""
     return hashlib.md5(seed.encode()).hexdigest()[:24].upper()
+
+
+# Characters permitted in an unquoted old-style plist value. Anything outside
+# this set (notably '+', as in POSIXShim+Compat.swift) must be quoted, or the
+# project file fails to parse with "missing semicolon in dictionary".
+SAFE_BARE = set("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_./$-")
+
+
+def plist_value(value: str) -> str:
+    """Quote a plist value only when it is not safe as a bare token."""
+    if value and all(ch in SAFE_BARE for ch in value):
+        return value
+    escaped = value.replace('"', '\\"')
+    return f'"{escaped}"'
 
 
 def collect(directory: Path) -> list[str]:
@@ -106,13 +121,13 @@ def main() -> int:
     w("/* Begin PBXFileReference section */")
     w(f"\t\t{ids['appProduct']} /* {APP_TARGET}.app */ = "
       f"{{isa = PBXFileReference; explicitFileType = wrapper.application; "
-      f"includeInIndex = 0; path = {APP_TARGET}.app; sourceTree = BUILT_PRODUCTS_DIR; }};")
+      f"includeInIndex = 0; path = {plist_value(APP_TARGET + '.app')}; sourceTree = BUILT_PRODUCTS_DIR; }};")
     for f in all_files:
         # Paths are relative to the Sources group (which declares path = Sources).
         rel = os.path.relpath(f, "Sources")
         w(f"\t\t{ids[f'fileRef:{f}']} /* {rel} */ = "
           f"{{isa = PBXFileReference; lastKnownFileType = sourcecode.swift; "
-          f"path = {rel}; sourceTree = \"<group>\"; }};")
+          f"path = {plist_value(rel)}; sourceTree = \"<group>\"; }};")
     w("/* End PBXFileReference section */")
     w("")
 
@@ -136,7 +151,7 @@ def main() -> int:
     for f in all_files:
         w(f"\t\t\t\t{ids[f'fileRef:{f}']} /* {f} */,")
     w("\t\t\t);")
-    w("\t\t\tpath = Sources;")
+    w(f"\t\t\tpath = {plist_value('Sources')};")
     w("\t\t\tsourceTree = \"<group>\";")
     w("\t\t};")
 
@@ -145,7 +160,7 @@ def main() -> int:
     w("\t\t\tchildren = (")
     w(f"\t\t\t\t{ids['appProduct']} /* {APP_TARGET}.app */,")
     w("\t\t\t);")
-    w("\t\t\tname = Products;")
+    w(f"\t\t\tname = {plist_value('Products')};")
     w("\t\t\tsourceTree = \"<group>\";")
     w("\t\t};")
 
@@ -174,8 +189,8 @@ def main() -> int:
     w("\t\t\t);")
     w("\t\t\tdependencies = (")
     w("\t\t\t);")
-    w(f"\t\t\tname = {APP_TARGET};")
-    w(f"\t\t\tproductName = {APP_TARGET};")
+    w(f"\t\t\tname = {plist_value(APP_TARGET)};")
+    w(f"\t\t\tproductName = {plist_value(APP_TARGET)};")
     w(f"\t\t\tproductReference = {ids['appProduct']} /* {APP_TARGET}.app */;")
     w("\t\t\tproductType = \"com.apple.product-type.application\";")
     w("\t\t};")
@@ -243,11 +258,10 @@ def main() -> int:
 
     # XCBuildConfiguration ---------------------------------------------------
     def settings_block(indent: str, entries: list[tuple[str, str]]) -> None:
+        # Build-setting values are written as valid plist literals already
+        # (bare tokens, quoted strings, or arrays), so they are emitted verbatim.
         for key, value in entries:
-            if value == "":
-                w(f"{indent}{key} = \"\";")
-            else:
-                w(f"{indent}{key} = {value};")
+            w(f"{indent}{key} = {value};")
 
     project_common = [
         ("ALWAYS_SEARCH_USER_PATHS", "NO"),
@@ -307,7 +321,6 @@ def main() -> int:
         ("PRODUCT_NAME", "\"$(TARGET_NAME)\""),
         ("SWIFT_VERSION", "5.0"),
         ("TARGETED_DEVICE_FAMILY", "1"),
-        ("IPHONEOS_DEPLOYMENT_TARGET", DEPLOYMENT_TARGET),
     ]
 
     w("/* Begin XCBuildConfiguration section */")
@@ -336,7 +349,7 @@ def main() -> int:
         w("\t\t\tbuildSettings = {")
         settings_block("\t\t\t\t", entries)
         w("\t\t\t};")
-        w(f"\t\t\tname = {name};")
+        w(f"\t\t\tname = {plist_value(name)};")
         w("\t\t};")
 
     for name, config_id in [("Debug", ids["targetDebug"]), ("Release", ids["targetRelease"])]:
@@ -345,7 +358,7 @@ def main() -> int:
         w("\t\t\tbuildSettings = {")
         settings_block("\t\t\t\t", target_common)
         w("\t\t\t};")
-        w(f"\t\t\tname = {name};")
+        w(f"\t\t\tname = {plist_value(name)};")
         w("\t\t};")
     w("/* End XCBuildConfiguration section */")
     w("")
@@ -376,12 +389,52 @@ def main() -> int:
     w("}")
 
     PROJECT_DIR.mkdir(parents=True, exist_ok=True)
-    PBXPROJ.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    content = "\n".join(lines) + "\n"
+    PBXPROJ.write_text(content, encoding="utf-8")
+
+    problems = validate(content)
+    if problems:
+        for problem in problems:
+            print(f"error: {problem}", file=sys.stderr)
+        return 1
 
     print(f"wrote {PBXPROJ.relative_to(ROOT)}")
     print(f"  target:    {APP_TARGET} ({BUNDLE_ID})")
     print(f"  sources:   {len(core_files)} core + {len(app_files)} app = {len(all_files)} files")
+    print(f"  validated: braces balanced, all object references resolve, "
+          f"no duplicate keys")
     return 0
+
+
+def validate(content: str) -> list[str]:
+    """Structural checks that catch the failure modes that produce a project
+    Xcode refuses to open."""
+    problems: list[str] = []
+
+    if content.count("{") != content.count("}"):
+        problems.append("unbalanced braces")
+    if content.count("(") != content.count(")"):
+        problems.append("unbalanced parentheses")
+    if not content.startswith("// !$*UTF8*$!"):
+        problems.append("missing UTF8 plist header")
+
+    defined = set(re.findall(r"^\s*([0-9A-F]{24})\s*(?:/\*.*?\*/)?\s*=", content, re.M))
+    referenced = set(re.findall(r"=\s*([0-9A-F]{24})", content)) | set(
+        re.findall(r"\b([0-9A-F]{24})\s*/\*", content)
+    )
+    missing = referenced - defined
+    if missing:
+        problems.append(f"object references without a definition: {sorted(missing)}")
+
+    # Duplicate keys inside a buildSettings block silently drop settings and
+    # have historically produced unreadable projects.
+    for block in re.findall(r"buildSettings = \{(.*?)\n\t\t\t\};", content, re.S):
+        keys = re.findall(r"^\s{4}([A-Za-z0-9_]+)\s*=", block, re.M)
+        duplicates = {k for k in keys if keys.count(k) > 1}
+        if duplicates:
+            problems.append(f"duplicate build setting(s): {sorted(duplicates)}")
+
+    return problems
 
 
 if __name__ == "__main__":
