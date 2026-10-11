@@ -1,0 +1,6 @@
+version: 1
+bundleID: com.bbaobaob.fsprobe
+product: FSProbe
+# Skip xtool's editor LSP support file: it is not needed in CI and writing it
+# requires an editor configuration xtool would otherwise have to create.
+skipLSP: true

@@ -8,6 +8,13 @@
 //  either comes from FSProbeCore or from a real syscall (sysctl).
 //
 
+#if canImport(FSProbeCore)
+// FSProbeCore is a separate module when this app is built as a SwiftPM package
+// (the xtool path). The generated Xcode project compiles the probe engine into
+// the same target, where it is not a module and the import is skipped.
+import FSProbeCore
+#endif
+
 import Darwin
 import Foundation
 import Observation

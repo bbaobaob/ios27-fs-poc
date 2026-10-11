@@ -7,6 +7,13 @@
 //  separate sections because comparing them is the point of the experiment.
 //
 
+#if canImport(FSProbeCore)
+// FSProbeCore is a separate module when this app is built as a SwiftPM package
+// (the xtool path). The generated Xcode project compiles the probe engine into
+// the same target, where it is not a module and the import is skipped.
+import FSProbeCore
+#endif
+
 import SwiftUI
 import UIKit
 

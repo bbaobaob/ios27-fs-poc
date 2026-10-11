@@ -8,8 +8,7 @@ let package = Package(
         .macOS(.v14)
     ],
     products: [
-        .library(name: "FSProbeCore", targets: ["FSProbeCore"]),
-        .executable(name: "fsprobe-cli", targets: ["fsprobe-cli"])
+        .library(name: "FSProbeCore", targets: ["FSProbeCore"])
     ],
     targets: [
         .target(

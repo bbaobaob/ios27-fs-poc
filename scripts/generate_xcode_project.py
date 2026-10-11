@@ -25,6 +25,9 @@ in docs/attribution.md as a known limitation.
 Sources/fsprobe-cli is deliberately excluded: it is the command-line runner used
 by CI, not part of the app.
 
+The same app sources are also the SwiftPM package at App/ (see App/Package.swift),
+which is what xtool builds. The two build paths share the source files.
+
 The generator validates its own output (balanced delimiters, resolvable object
 references, no duplicate build settings, quoted values that need quoting) and
 exits non-zero rather than writing a project Xcode cannot open.
@@ -47,7 +50,7 @@ BUNDLE_ID = "com.bbaobaob.fsprobe"
 APP_TARGET = "FSProbe"
 
 CORE_DIR = ROOT / "Sources" / "FSProbeCore"
-APP_DIR = ROOT / "Sources" / "App"
+APP_DIR = ROOT / "App" / "Sources" / "FSProbe"
 
 
 def uid(seed: str) -> str:

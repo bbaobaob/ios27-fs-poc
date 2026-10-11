@@ -1,0 +1,86 @@
+name: xtool
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# Builds the iOS app with xtool (https://github.com/xtool-org/xtool) instead of
+# xcodebuild: no generated .xcodeproj, no pbxproj, and a toolchain that can also
+# sign with a free Apple ID if credentials are ever supplied.
+#
+# xtool is a third-party build tool, not an exploit or PoC implementation. It is
+# used purely as build infrastructure, exactly as Xcode is; all probe logic in
+# this repository is independently authored. See docs/attribution.md.
+concurrency:
+  group: xtool-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build the app with xtool
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install xtool
+        run: |
+          set -euo pipefail
+          curl -fL "https://github.com/xtool-org/xtool/releases/latest/download/xtool.app.zip" \
+            -o xtool.app.zip
+          rm -rf xtool.app
+          unzip -q xtool.app.zip -d xtool-extract
+          sudo rm -rf /Applications/xtool.app
+          sudo cp -R xtool-extract/xtool.app /Applications/
+          # Downloaded binaries are quarantined on macOS; clear it or the
+          # binary will not execute.
+          sudo xattr -dr com.apple.quarantine /Applications/xtool.app || true
+          /Applications/xtool.app/Contents/MacOS/xtool --version
+
+      - name: Show xtool configuration
+        run: |
+          /Applications/xtool.app/Contents/MacOS/xtool help dev
+          echo "--- xtool.yml ---"
+          cat App/xtool.yml
+
+      # On macOS this is a no-op: xtool uses the iOS SDK from the host Xcode,
+      # so no Xcode.xip download is needed.
+      - name: Ensure the Darwin SDK
+        run: |
+          /Applications/xtool.app/Contents/MacOS/xtool sdk install /Applications/Xcode.app --slim || true
+          /Applications/xtool.app/Contents/MacOS/xtool sdk list || true
+
+      - name: Build the IPA with xtool
+        working-directory: App
+        run: |
+          set -o pipefail
+          /Applications/xtool.app/Contents/MacOS/xtool dev build \
+            --configuration release \
+            --ipa 2>&1 | tee xtool-build.log
+
+      - name: Locate and inspect the IPA
+        run: |
+          set -euo pipefail
+          IPA="$(find "$PWD/App" -name '*.ipa' -maxdepth 4 | head -1)"
+          if [ -z "$IPA" ]; then
+            echo "No .ipa was produced" >&2
+            exit 1
+          fi
+          echo "IPA: $IPA"
+          ls -lh "$IPA"
+          echo "--- contents ---"
+          unzip -l "$IPA" | head -20
+          echo "$IPA" > ipa-path.txt
+
+      - name: Upload the xtool IPA
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fsprobe-xtool-ipa
+          path: |
+            App/xtool/*.ipa
+            App/xtool-build.log
+          if-no-files-found: warn
+          retention-days: 30
