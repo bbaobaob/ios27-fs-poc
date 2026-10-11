@@ -25,45 +25,73 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install xtool
+      # xtool is run with stdin closed so that any interactive prompt (2FA, a
+      # confirmation) fails the step immediately instead of hanging the job.
+      # xtool must never have its stdout redirected to /dev/null (xtool issue
+      # #268 crashes in that case), so output goes to a log file instead.
+
+      - name: Download xtool
+        timeout-minutes: 10
         run: |
           set -euo pipefail
-          curl -fL "https://github.com/xtool-org/xtool/releases/latest/download/xtool.app.zip" \
+          echo "Fetching the latest xtool release asset..."
+          curl -fL --retry 3 \
+            "https://github.com/xtool-org/xtool/releases/latest/download/xtool.app.zip" \
             -o xtool.app.zip
-          rm -rf xtool.app
+          echo "Downloaded: $(du -h xtool.app.zip | cut -f1)"
+
+      - name: Install xtool
+        timeout-minutes: 10
+        run: |
+          set -euo pipefail
+          rm -rf xtool-extract
+          mkdir -p xtool-extract
+          echo "Unzipping..."
           unzip -q xtool.app.zip -d xtool-extract
-          sudo rm -rf /Applications/xtool.app
-          sudo cp -R xtool-extract/xtool.app /Applications/
-          # Downloaded binaries are quarantined on macOS; clear it or the
-          # binary will not execute.
-          sudo xattr -dr com.apple.quarantine /Applications/xtool.app || true
-          /Applications/xtool.app/Contents/MacOS/xtool --version
+          echo "Extracted:"
+          ls -lh xtool-extract
+          # Files written by curl do not carry the quarantine attribute, but
+          # clear it defensively so Gatekeeper cannot block execution.
+          xattr -dr com.apple.quarantine xtool-extract/xtool.app 2>/dev/null || true
+          echo "XTOOL=$GITHUB_WORKSPACE/xtool-extract/xtool.app/Contents/MacOS/xtool" >> "$GITHUB_ENV"
+
+      - name: Verify xtool runs
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          "$XTOOL" --version </dev/null 2>&1 | tee xtool-version.log
+          echo "xtool is runnable"
 
       - name: Show xtool configuration
+        timeout-minutes: 5
         run: |
-          /Applications/xtool.app/Contents/MacOS/xtool help dev
-          echo "--- xtool.yml ---"
+          "$XTOOL" help dev </dev/null 2>&1 | head -40 || true
+          echo "--- App/xtool.yml ---"
           cat App/xtool.yml
 
       # On macOS this is a no-op: xtool uses the iOS SDK from the host Xcode,
       # so no Xcode.xip download is needed.
       - name: Ensure the Darwin SDK
+        timeout-minutes: 10
         run: |
-          /Applications/xtool.app/Contents/MacOS/xtool sdk install /Applications/Xcode.app --slim || true
-          /Applications/xtool.app/Contents/MacOS/xtool sdk list || true
+          set +e
+          "$XTOOL" sdk install /Applications/Xcode.app --slim </dev/null 2>&1 | tee sdk-install.log
+          "$XTOOL" sdk list </dev/null 2>&1 | tee sdk-list.log || true
 
       - name: Build the IPA with xtool
+        timeout-minutes: 25
         working-directory: App
         run: |
           set -o pipefail
-          /Applications/xtool.app/Contents/MacOS/xtool dev build \
+          "$XTOOL" dev build \
             --configuration release \
-            --ipa 2>&1 | tee xtool-build.log
+            --ipa </dev/null 2>&1 | tee xtool-build.log
 
       - name: Locate and inspect the IPA
+        timeout-minutes: 5
         run: |
           set -euo pipefail
-          IPA="$(find "$PWD/App" -name '*.ipa' -maxdepth 4 | head -1)"
+          IPA="$(find "$GITHUB_WORKSPACE/App" -name '*.ipa' -maxdepth 4 | head -1)"
           if [ -z "$IPA" ]; then
             echo "No .ipa was produced" >&2
             exit 1
@@ -72,7 +100,6 @@ jobs:
           ls -lh "$IPA"
           echo "--- contents ---"
           unzip -l "$IPA" | head -20
-          echo "$IPA" > ipa-path.txt
 
       - name: Upload the xtool IPA
         if: always()
@@ -82,5 +109,8 @@ jobs:
           path: |
             App/xtool/*.ipa
             App/xtool-build.log
+            xtool-version.log
+            sdk-install.log
+            sdk-list.log
           if-no-files-found: warn
           retention-days: 30
