@@ -7,7 +7,6 @@
 //  text, the evidence the core captured, and the attribution.
 //
 
-import FSProbeCore
 import SwiftUI
 
 struct ResultDetailView: View {

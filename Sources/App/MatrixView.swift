@@ -7,7 +7,6 @@
 //  separate sections because comparing them is the point of the experiment.
 //
 
-import FSProbeCore
 import SwiftUI
 import UIKit
 
