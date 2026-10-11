@@ -130,3 +130,54 @@ _Pending — blocked: no iOS 27 runtime or Xcode release is available in this en
 - Limitations: **unsigned** and **never executed**. No runtime result is claimed.
 - Note: this IPA was built entirely from the SwiftPM package (`App/`) with no generated
   `.xcodeproj` and no pbxproj involved, which is the point of the xtool path.
+
+### 2026-10-12 — CI-built IPA handover (build only, never executed)
+
+Two IPAs are produced by CI at every push to `main`, from the same source tree, by
+two independent build systems. Both were re-verified after download on this date.
+
+| Workflow | Build system | Artifact | Size |
+| --- | --- | --- | --- |
+| `ios` | `xcodebuild` on `macos-15` (Release, `iphoneos`) | `FSProbe-unsigned-ipa` | 336 KB |
+| `xtool` | `xtool dev build` on `macos-15` (Release) | `fsprobe-xtool-ipa` | 1.4 MB |
+
+Verified for both:
+
+- `Payload/FSProbe.app/FSProbe` is a Mach-O 64-bit **arm64 device** binary (links
+  `/usr/lib/dyld`, contains no `/Library/Developer/CoreSimulator` path).
+- Contains the current experiment code: the `fsprobe.capability-matrix.v2` schema
+  tag, the `Boundary established` ascent stop reason, and the
+  `fsprobe-writetest.tmp` synthetic filename.
+- Bundle identity: `com.bbaobaob.fsprobe`, `MinimumOSVersion = 17.0`,
+  `CFBundleSupportedPlatforms = iPhoneOS`.
+
+Both are **unsigned** and **have never been executed**. No runtime result is claimed.
+
+The xtool path builds from the `App/` SwiftPM package with no generated
+`.xcodeproj` and no pbxproj involved; the xcodebuild path uses the generated
+project. Two independent toolchains agreeing on the artifact is the point of
+keeping both.
+
+### Install path (research finding, recorded 2026-10-12)
+
+The only computer available to the operator is an Android phone running Termux.
+Research into getting an IPA onto a physical iPhone with no Mac found:
+
+- **Sideloadly** (v0.60.0) signs and installs an unsigned IPA with a **free Apple
+  ID**. Hosts: **macOS and Windows only** — there is no Linux or Android build.
+  Free-account apps last 7 days; auto-refresh re-signs them.
+- **AltStore / AltServer** likewise requires a macOS or Windows host.
+- **Feather** (on-device, no computer) installs IPAs but **requires the user to
+  supply a `.p12` certificate and a `.mobileprovision` profile**. It does not mint
+  a free-account certificate itself. The community route is shared third-party
+  certificates (KravaSign, "applep12.com", "Sunshine"), which are frequently
+  revoked and which require trusting an unknown third party with signing
+  material. **Not recommended.**
+- **xtool** can sign and install over USB from Linux/macOS/Windows-WSL with a
+  free Apple ID, but needs a computer and a USB-connected device. Its aarch64
+  AppImage would not solve the problem: `usbmuxd` does not exist for Android
+  userspace, so an iPhone is not reachable from Termux.
+
+**Conclusion: there is no Android-only path.** Installing on the physical iPhone
+requires a macOS or Windows computer (Sideloadly), or a Linux/WSL computer with
+xtool. This is a platform requirement, not a limitation of the artifact.
