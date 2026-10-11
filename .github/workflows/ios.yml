@@ -1,0 +1,172 @@
+name: ios
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# Public repository: standard GitHub-hosted macOS runners (with Xcode and the
+# iOS Simulator runtime) are free for public repos. This is the build-and-run
+# path for the iOS app target; the physical-device run is separate and is
+# recorded in docs/device-validation-log.md.
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build FSProbe for iOS Simulator
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Regenerate the Xcode project from source
+        run: python3 scripts/generate_xcode_project.py
+
+      - name: Show available simulator runtimes
+        run: |
+          xcrun simctl list runtimes
+          xcrun simctl list devices available
+
+      - name: Build for the iOS Simulator
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project FSProbe.xcodeproj \
+            -scheme FSProbe \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build/DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            | tee build.log
+        timeout-minutes: 25
+
+      - name: Build for a physical device (compile-only)
+        # Compiling for iphoneos proves the code is valid device code. It is
+        # not signed and cannot be installed; signing needs a real Apple ID.
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project FSProbe.xcodeproj \
+            -scheme FSProbe \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build/DerivedDataDevice \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            | tee build-device.log
+        timeout-minutes: 25
+
+      - name: Upload build logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-build-logs
+          path: |
+            build.log
+            build-device.log
+          if-no-files-found: warn
+          retention-days: 30
+
+  simulator-run:
+    name: Run FSProbe in the iOS Simulator and capture the matrix
+    runs-on: macos-15
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Regenerate the Xcode project from source
+        run: python3 scripts/generate_xcode_project.py
+
+      - name: Build for the iOS Simulator
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project FSProbe.xcodeproj \
+            -scheme FSProbe \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build/DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            | tail -20
+
+      - name: Boot an iPhone simulator
+        run: |
+          set -euo pipefail
+          UDID="$(xcrun simctl list devices available -j \
+            | python3 -c '
+          import json, sys
+          data = json.load(sys.stdin)
+          for runtime, devices in data["devices"].items():
+              if "iOS" not in runtime:
+                  continue
+              for d in devices:
+                  if d["name"].startswith("iPhone") and d["isAvailable"]:
+                      print(d["udid"])
+                      raise SystemExit(0)
+          raise SystemExit(1)
+          ')"
+          echo "Selected simulator UDID: $UDID"
+          echo "SIMULATOR_UDID=$UDID" >> "$GITHUB_ENV"
+          xcrun simctl boot "$UDID" || echo "already booted"
+          xcrun simctl bootstatus "$UDID" -b
+
+      - name: Install and launch the app
+        run: |
+          set -euo pipefail
+          APP="$(find "$PWD/build/DerivedData" -name 'FSProbe.app' -maxdepth 5 | head -1)"
+          echo "App bundle: $APP"
+          xcrun simctl install "$SIMULATOR_UDID" "$APP"
+          xcrun simctl launch "$SIMULATOR_UDID" com.bbaobaob.fsprobe
+          # The app computes the matrix on launch and writes matrix.json /
+          # matrix.txt into its Documents directory.
+          for i in $(seq 1 24); do
+            sleep 5
+            CONTAINER="$(xcrun simctl get_app_container "$SIMULATOR_UDID" com.bbaobaob.fsprobe data 2>/dev/null || true)"
+            if [ -n "$CONTAINER" ] && [ -f "$CONTAINER/Documents/matrix.json" ]; then
+              echo "matrix.json appeared after $((i * 5))s"
+              break
+            fi
+            echo "waiting for matrix.json ($((i * 5))s)"
+          done
+
+      - name: Extract the results
+        run: |
+          set -euo pipefail
+          CONTAINER="$(xcrun simctl get_app_container "$SIMULATOR_UDID" com.bbaobaob.fsprobe data)"
+          echo "App data container: $CONTAINER"
+          cp "$CONTAINER/Documents/matrix.json" matrix-ios-simulator.json
+          cp "$CONTAINER/Documents/matrix.txt" matrix-ios-simulator.txt
+          echo "--- matrix.txt ---"
+          cat matrix-ios-simulator.txt
+
+      - name: Capture simulator diagnostics
+        if: always()
+        run: |
+          set +e
+          xcrun simctl spawn "$SIMULATOR_UDID" log show --last 5m --predicate \
+            'process == "FSProbe"' > simulator-app.log 2>&1
+          xcrun simctl terminate "$SIMULATOR_UDID" com.bbaobaob.fsprobe 2>&1 || true
+          tail -40 simulator-app.log || true
+
+      - name: Upload the simulator matrix
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-simulator-matrix
+          path: |
+            matrix-ios-simulator.json
+            matrix-ios-simulator.txt
+            simulator-app.log
+          if-no-files-found: warn
+          retention-days: 30

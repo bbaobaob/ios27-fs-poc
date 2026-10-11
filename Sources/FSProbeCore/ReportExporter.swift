@@ -19,8 +19,10 @@ public enum ReportExporter {
     public static func text(_ matrix: CapabilityMatrix, targets: [FSTarget]) -> String {
         var lines: [String] = []
         lines.append("FSProbe capability matrix")
-        lines.append("platform: \(matrix.environment.osName) \(matrix.environment.osVersion) (\(matrix.environment.osBuild))")
+        lines.append("platform: \(matrix.environment.osName) \(matrix.environment.osVersion)")
+        lines.append("build:    \(matrix.environment.osBuild)")
         lines.append("device:   \(matrix.environment.deviceModel)")
+        lines.append("process:  \(matrix.environment.processPath)")
         lines.append("captured: \(matrix.environment.timestampUTC)")
         lines.append("")
 

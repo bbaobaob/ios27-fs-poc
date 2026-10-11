@@ -153,6 +153,7 @@ final class CapabilityMatrixTests: XCTestCase {
         )
         let text = ReportExporter.text(matrix, targets: [FSTarget(path: "/x", label: "x", rationale: "", isBaseline: false)])
         XCTAssertTrue(text.contains("UnitTest"))
+        XCTAssertTrue(text.contains("build:"))
         XCTAssertTrue(text.contains("/x"))
         XCTAssertTrue(text.contains("Read-without-enumeration"))
     }

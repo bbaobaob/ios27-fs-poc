@@ -66,7 +66,14 @@ default:
 }
 
 let deviceModel = HostInfo.modelIdentifier()
+let platformName: String
+#if canImport(Darwin)
+platformName = "macOS"
+#else
+platformName = HostInfo.platformName()
+#endif
 let environment = CapabilityMatrix.EnvironmentRecord(
+    osName: platformName,
     osVersion: ProcessInfo.processInfo.operatingSystemVersionString,
     osBuild: HostInfo.buildVersion(),
     deviceModel: "\(options.label) / \(deviceModel)"
@@ -125,6 +132,16 @@ enum HostInfo {
         return String(cString: build)
         #else
         return "unknown"
+        #endif
+    }
+
+    /// Platform name for the report header. Kept separate from the version
+    /// string so the header never repeats itself.
+    static func platformName() -> String {
+        #if canImport(Darwin)
+        return "macOS"
+        #else
+        return "verification-host"
         #endif
     }
 }
