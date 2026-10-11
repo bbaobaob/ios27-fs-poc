@@ -83,11 +83,11 @@ extension POSIXShim {
         return cClose(fd)
     }
 
-    public static func read(_ fd: Int32, _ buffer: UnsafeMutableRawPointer, _ count: Int) -> Int {
+    public static func readFD(_ fd: Int32, _ buffer: UnsafeMutableRawPointer, _ count: Int) -> Int {
         return cRead(fd, buffer, count)
     }
 
-    public static func write(_ fd: Int32, _ buffer: UnsafeRawPointer, _ count: Int) -> Int {
+    public static func writeFD(_ fd: Int32, _ buffer: UnsafeRawPointer, _ count: Int) -> Int {
         return cWrite(fd, buffer, count)
     }
 

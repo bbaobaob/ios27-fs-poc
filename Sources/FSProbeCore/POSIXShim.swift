@@ -11,8 +11,8 @@
 //  API (all return -1/0 conventions identical to POSIX, with errno set):
 //    openFile(_:_:_:)            -> open(path, flags, mode)
 //    closeFile(_:)               -> close(fd)
-//    read(_:_:_:)                -> read(fd, buf, count)
-//    write(_:_:_:)               -> write(fd, buf, count)
+//    readFD(_:_:_:)              -> read(fd, buf, count)
+//    writeFD(_:_:_:)             -> write(fd, buf, count)
 //    openDir(_:)                 -> opendir(path)
 //    nextEntry(_:)               -> readdir(dir)
 //    closeDir(_:)                -> closedir(dir)

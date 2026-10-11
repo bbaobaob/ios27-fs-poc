@@ -27,11 +27,11 @@ extension POSIXShim {
         return close(fd)
     }
 
-    public static func read(_ fd: Int32, _ buffer: UnsafeMutableRawPointer, _ count: Int) -> Int {
+    public static func readFD(_ fd: Int32, _ buffer: UnsafeMutableRawPointer, _ count: Int) -> Int {
         return read(fd, buffer, count)
     }
 
-    public static func write(_ fd: Int32, _ buffer: UnsafeRawPointer, _ count: Int) -> Int {
+    public static func writeFD(_ fd: Int32, _ buffer: UnsafeRawPointer, _ count: Int) -> Int {
         return write(fd, buffer, count)
     }
 
@@ -69,8 +69,12 @@ extension POSIXShim {
     }
 
     public static func readLink(_ path: String, into buffer: UnsafeMutableRawPointer, capacity: Int) -> Int {
-        return path.withCString { ptr in
-            readlink(ptr, buffer.assumingMemoryBound(to: CChar.self), capacity)
+        // withMemoryRebound is the sanctioned way to retype a raw buffer;
+        // assumingMemoryBound on memory already bound to another type is UB.
+        return buffer.withMemoryRebound(to: CChar.self, capacity: capacity) { ptr in
+            path.withCString { cPtr in
+                readlink(cPtr, ptr, capacity)
+            }
         }
     }
 

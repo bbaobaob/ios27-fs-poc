@@ -166,7 +166,7 @@ public enum POSIXProbeEngine {
         var buffer = [UInt8](repeating: 0, count: maxReadBytes)
         let bytesRead: Int = buffer.withUnsafeMutableBufferPointer { ptr -> Int in
             guard let base = ptr.baseAddress else { return -1 }
-            return POSIXShim.read(fd, base, ptr.count)
+            return POSIXShim.readFD(fd, base, ptr.count)
         }
         if bytesRead < 0 {
             let code = currentErrno()
@@ -314,7 +314,7 @@ public enum POSIXProbeEngine {
     private static func writeAll(fd: Int32, payload: Data) -> Int {
         let written: Int = payload.withUnsafeBytes { raw -> Int in
             guard let base = raw.baseAddress else { return -1 }
-            return POSIXShim.write(fd, base, raw.count)
+            return POSIXShim.writeFD(fd, base, raw.count)
         }
         return written
     }
@@ -326,7 +326,7 @@ public enum POSIXProbeEngine {
         var buffer = [UInt8](repeating: 0, count: maxReadBytes)
         let n: Int = buffer.withUnsafeMutableBufferPointer { ptr -> Int in
             guard let base = ptr.baseAddress else { return -1 }
-            return POSIXShim.read(fd, base, ptr.count)
+            return POSIXShim.readFD(fd, base, ptr.count)
         }
         guard n > 0 else { return Data() }
         return Data(buffer.prefix(n))
