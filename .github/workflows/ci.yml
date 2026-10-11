@@ -38,6 +38,14 @@ jobs:
             --label "macos-runner-host" \
             --json matrix-host.json \
             --text matrix-host.txt
+          # Control data point for the ascent experiment: the same read-only
+          # walk on the macOS host, where there is no iOS container model.
+          .build/release/fsprobe-cli \
+            --label "macos-runner-host-ascent" \
+            --targets baseline \
+            --ascend "$HOME" \
+            --json matrix-host-ascent.json \
+            --text matrix-host-ascent.txt
 
       # macOS has no `timeout` binary, so a hung test run is bounded by a shell
       # watchdog with the step timeout as a backstop.
@@ -87,6 +95,8 @@ jobs:
           path: |
             matrix-host.json
             matrix-host.txt
+            matrix-host-ascent.json
+            matrix-host-ascent.txt
             test-output.log
             crash-backtrace.log
           if-no-files-found: warn
