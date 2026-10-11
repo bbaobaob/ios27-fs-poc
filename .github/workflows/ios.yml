@@ -81,17 +81,41 @@ jobs:
           /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist"
           /usr/libexec/PlistBuddy -c 'Print :MinimumOSVersion' "$APP/Info.plist"
 
-          # An IPA is Payload/<App>.app at the archive root. ditto is the
-          # canonical packager: it preserves symlinks and resource forks, which
-          # zip -r does not.
+          # An IPA is Payload/<App>.app at the archive root.
+          #
+          # zip -r -y is used rather than `ditto -c -k --keepParent`: ditto's
+          # --keepParent embeds only the source's own name, which produced an
+          # archive rooted at FSProbe.app/ with no Payload/ directory. Installers
+          # (zsign reported "Can't find payload directory!") reject that.
+          # -y stores symlinks as symlinks instead of following them.
           rm -rf Payload FSProbe-unsigned.ipa
           mkdir -p Payload
           cp -R "$APP" Payload/
-          ditto -c -k --sequesterRsrc --keepParent "Payload/FSProbe.app" FSProbe-unsigned.ipa
+          zip -q -r -y FSProbe-unsigned.ipa Payload
           ls -lh FSProbe-unsigned.ipa
 
-          echo "--- IPA contents (first 25 entries) ---"
-          unzip -l FSProbe-unsigned.ipa | head -30
+          echo "--- IPA contents ---"
+          unzip -l FSProbe-unsigned.ipa
+
+      - name: Validate the IPA layout
+        run: |
+          set -euo pipefail
+          # Regression guard: the archive must be rooted at Payload/ and contain
+          # the app bundle inside it. A malformed IPA installs nowhere, and the
+          # failure only shows up on the device.
+          LISTING="$(unzip -Z1 FSProbe-unsigned.ipa)"
+          echo "$LISTING"
+          echo "$LISTING" | grep -qx 'Payload/' || {
+            echo "FAIL: archive root is not Payload/" >&2; exit 1; }
+          echo "$LISTING" | grep -qx 'Payload/FSProbe.app/' || {
+            echo "FAIL: Payload/FSProbe.app/ is missing" >&2; exit 1; }
+          echo "$LISTING" | grep -qx 'Payload/FSProbe.app/Info.plist' || {
+            echo "FAIL: Payload/FSProbe.app/Info.plist is missing" >&2; exit 1; }
+          echo "$LISTING" | grep -qx 'Payload/FSProbe.app/FSProbe' || {
+            echo "FAIL: the app executable is missing" >&2; exit 1; }
+          if echo "$LISTING" | grep -qv '^Payload/'; then
+            echo "FAIL: entries exist outside Payload/" >&2; exit 1; fi
+          echo "IPA layout is valid"
 
       - name: Upload build logs
         if: always()
