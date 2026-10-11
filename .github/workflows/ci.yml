@@ -29,6 +29,16 @@ jobs:
       - name: Build (release)
         run: swift build -c release
 
+      # Runs before the test step so host results are captured even if the
+      # test process crashes.
+      - name: Run harness on the macOS host
+        continue-on-error: true
+        run: |
+          .build/release/fsprobe-cli \
+            --label "macos-runner-host" \
+            --json matrix-host.json \
+            --text matrix-host.txt
+
       # macOS has no `timeout` binary, so a hung test run is bounded by a shell
       # watchdog with the step timeout as a backstop.
       - name: Test
@@ -45,24 +55,23 @@ jobs:
           kill "$watchdog_pid" 2>/dev/null
           cat test-output.log
           echo "swift test rc=$rc"
-          if [ "$rc" -eq 0 ]; then exit 0; fi
-
-          echo "::group::xcodebuild test fallback"
-          xcodebuild test -scheme FSProbe -destination 'platform=macOS' \
-            -configuration Debug > xcodebuild-test.log 2>&1
-          rc=$?
-          tail -40 xcodebuild-test.log
-          echo "::endgroup::"
-          echo "xcodebuild test rc=$rc"
           exit "$rc"
 
-      - name: Run harness on the macOS host
-        run: |
-          .build/release/fsprobe-cli \
-            --label "macos-runner-host" \
-            --json matrix-host.json \
-            --text matrix-host.txt
+      - name: Capture crash backtrace
+        if: failure()
         continue-on-error: true
+        run: |
+          set +e
+          BUNDLE="$(find .build -name 'FSProbePackageTests.xctest' -maxdepth 6 | head -1)"
+          EXEC="$BUNDLE/Contents/MacOS/FSProbePackageTests"
+          echo "bundle=$BUNDLE"
+          echo "exec=$EXEC"
+          lldb -b \
+            -o "run" \
+            -o "bt all" \
+            -o "quit" \
+            -- "$EXEC" > crash-backtrace.log 2>&1
+          tail -60 crash-backtrace.log
 
       - name: Platform context (recorded with every host run)
         run: |
@@ -70,7 +79,7 @@ jobs:
           xcodebuild -version
           uname -m
 
-      - name: Upload matrix, platform context, and test output
+      - name: Upload matrix, platform context, and diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -79,6 +88,6 @@ jobs:
             matrix-host.json
             matrix-host.txt
             test-output.log
-            xcodebuild-test.log
+            crash-backtrace.log
           if-no-files-found: warn
           retention-days: 30
