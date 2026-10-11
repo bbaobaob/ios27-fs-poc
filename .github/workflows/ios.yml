@@ -103,23 +103,47 @@ jobs:
       - name: Boot an iPhone simulator
         run: |
           set -euo pipefail
+          # Pick the newest available iOS runtime. Note: the macOS-15 runner
+          # image tops out below iOS 27, so the newest runtime here is still
+          # not the research target. See docs/device-validation-log.md.
           UDID="$(xcrun simctl list devices available -j \
             | python3 -c '
-          import json, sys
+          import json, re, sys
           data = json.load(sys.stdin)
+          best = None
           for runtime, devices in data["devices"].items():
-              if "iOS" not in runtime:
+              m = re.search(r"SimRuntime\.iOS-(\d+)-(\d+)", runtime)
+              if not m:
                   continue
-              for d in devices:
-                  if d["name"].startswith("iPhone") and d["isAvailable"]:
-                      print(d["udid"])
-                      raise SystemExit(0)
-          raise SystemExit(1)
+              version = (int(m.group(1)), int(m.group(2)))
+              if best is None or version > best[0]:
+                  best = (version, runtime, devices)
+          if best is None:
+              raise SystemExit("no iOS runtime found")
+          version, runtime, devices = best
+          print(f"newest iOS runtime: {runtime} ({version[0]}.{version[1]})", file=sys.stderr)
+          for d in devices:
+              if d["name"].startswith("iPhone") and d["isAvailable"]:
+                  print(d["udid"])
+                  raise SystemExit(0)
+          raise SystemExit("no available iPhone in the newest runtime")
           ')"
           echo "Selected simulator UDID: $UDID"
           echo "SIMULATOR_UDID=$UDID" >> "$GITHUB_ENV"
           xcrun simctl boot "$UDID" || echo "already booted"
           xcrun simctl bootstatus "$UDID" -b
+          RUNTIME="$(xcrun simctl list runtimes -j \
+            | python3 -c '
+          import json, re, sys
+          data = json.load(sys.stdin)
+          for r in data["runtimes"]:
+              m = re.search(r"iOS-(\d+)-(\d+)", r.get("identifier", ""))
+              if m:
+                  print(f"ios{m.group(1)}-{m.group(2)}")
+                  break
+          ')"
+          echo "SIMULATOR_RUNTIME=$RUNTIME" >> "$GITHUB_ENV"
+          echo "Runtime label: $RUNTIME"
 
       - name: Install and launch the app
         run: |
