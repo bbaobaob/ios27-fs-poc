@@ -30,7 +30,10 @@ jobs:
         run: swift build -c release
 
       - name: Test
-        run: swift test -c release
+        # Hard timeout: a hung test step must fail the run, not stall it.
+        timeout-minutes: 20
+        run: |
+          swift test -c release --verbose 2>&1 | tee test-output.log
 
       - name: Run harness on the macOS host
         run: |
@@ -54,5 +57,6 @@ jobs:
           path: |
             matrix-host.json
             matrix-host.txt
-          if-no-files-found: ignore
+            test-output.log
+          if-no-files-found: warn
           retention-days: 30
