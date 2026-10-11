@@ -22,6 +22,20 @@ Everything under `Sources/` and `Tests/` was written for this project from first
   attribution, and export round-tripping.
 - `docs/*`, `README.md`, `.github/workflows/ci.yml`.
 
+## Third-party build tooling used (not an implementation source)
+
+- **xtool** (https://github.com/xtool-org/xtool), version 1.21.0, used by
+  `.github/workflows/xtool.yml` to build the iOS app from the SwiftPM package. xtool is a
+  build/deploy toolchain — the Linux/Windows analogue of Xcode — and is used here purely as
+  build infrastructure, exactly as Xcode is. It contributes no probe logic, no exploit, and no
+  PoC implementation: every line of filesystem-probing code in `Sources/FSProbeCore` was
+  written for this project. xtool's signing capability (a free-Apple-ID development signing
+  flow) is documented but deliberately unused, because it would require Apple ID credentials
+  in CI.
+- The macOS xtool binary is a GUI app that requires `XTL_CLI=1` to run as a CLI; the workflow
+  sets it and invokes xtool through its own `Resources/bin/xtool` wrapper. Without it the
+  binary launches its UI and hangs forever on a headless runner.
+
 ## Standard APIs and documented platform capabilities relied upon
 
 These are used as documented, public interfaces — not as an implementation source:

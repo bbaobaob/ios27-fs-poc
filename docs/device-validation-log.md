@@ -110,3 +110,23 @@ _Pending — blocked: no iOS 27 runtime or Xcode release is available in this en
   signing step with an Apple ID (free personal accounts are sufficient for development
   signing) using Xcode, AltStore, or Sideloadly.
 - The IPA has never been executed. Nothing in this entry is a runtime result.
+
+### 2026-10-11 — xtool-built IPA (build only, never executed)
+
+- Produced by the `xtool` workflow: xtool 1.21.0 on a `macos-15` runner, building the
+  `App/` SwiftPM package with `xtool dev build --configuration release --ipa`.
+- Artifact: `fsprobe-xtool-ipa`, containing `App/xtool/FSProbe.ipa`.
+- Verified after download:
+  - Structure: `Payload/FSProbe.app/` containing `FSProbe` (executable) and `Info.plist`.
+  - `Info.plist`: `CFBundleIdentifier = com.bbaobaob.fsprobe`, `CFBundleExecutable = FSProbe`,
+    `CFBundleShortVersionString = 1.0.0`, `MinimumOSVersion = 17.0`,
+    `UIDeviceFamily = [1, 2]`, `CFBundleSupportedPlatforms = iPhoneOS`.
+  - Executable: Mach-O 64-bit arm64, links `/usr/lib/dyld`, contains no
+    `/Library/Developer/CoreSimulator` path — a device binary.
+  - Contains the probe engine: `fsprobe-writetest.tmp`, `kern.osversion`, `matrix.json`, and
+    the `fsprobe.capability-matrix.v1` schema tag are all present.
+- Size: 1.4 MB, versus 325 KB for the xcodebuild-produced IPA. Both are device binaries; the
+  difference is build configuration, not platform.
+- Limitations: **unsigned** and **never executed**. No runtime result is claimed.
+- Note: this IPA was built entirely from the SwiftPM package (`App/`) with no generated
+  `.xcodeproj` and no pbxproj involved, which is the point of the xtool path.
