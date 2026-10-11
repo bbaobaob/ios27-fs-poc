@@ -16,9 +16,18 @@ public struct CapabilityMatrix: Sendable {
     /// Environment record: results are meaningless without the exact platform.
     public let environment: EnvironmentRecord
 
-    public init(results: [ProbeResult], environment: EnvironmentRecord) {
+    /// Directory-ascent steps, when an ascent was requested. Nearest ancestor
+    /// first; empty when no ascent was run.
+    public let ancestors: [AncestorStep]
+
+    public init(
+        results: [ProbeResult],
+        environment: EnvironmentRecord,
+        ancestors: [AncestorStep] = []
+    ) {
         self.results = results
         self.environment = environment
+        self.ancestors = ancestors
     }
 
     /// Platform context captured at run time.

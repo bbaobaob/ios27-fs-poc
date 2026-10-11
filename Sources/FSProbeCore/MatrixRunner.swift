@@ -16,10 +16,15 @@ public struct MatrixRunner: Sendable {
     ///   - recordEntryNames: record sample entry names. Enable only when the
     ///     target list contains directories this harness created.
     ///   - environment: platform context recorded with the results
+    ///   - ascendFrom: when set, also run the read-only directory-ascent
+    ///     experiment starting at this path. The app passes its own container,
+    ///     which makes the ancestors the real research surface: on a device they
+    ///     are the /var/mobile/Containers chain.
     public func run(
         targets: [FSTarget],
         recordEntryNames: Bool = false,
-        environment: CapabilityMatrix.EnvironmentRecord? = nil
+        environment: CapabilityMatrix.EnvironmentRecord? = nil,
+        ascendFrom: String? = nil
     ) -> CapabilityMatrix {
         var results: [ProbeResult] = []
         for target in targets {
@@ -37,6 +42,7 @@ public struct MatrixRunner: Sendable {
             osBuild: "unknown",
             deviceModel: "unknown"
         )
-        return CapabilityMatrix(results: results, environment: env)
+        let ancestors = ascendFrom.map { AncestorProbe.ascend(from: $0) } ?? []
+        return CapabilityMatrix(results: results, environment: env, ancestors: ancestors)
     }
 }

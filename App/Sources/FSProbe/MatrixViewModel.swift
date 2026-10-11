@@ -179,7 +179,13 @@ final class MatrixViewModel {
         let matrix = MatrixRunner().run(
             targets: targets,
             recordEntryNames: true,
-            environment: environment
+            environment: environment,
+            // Ascend from the app's own container. On a device the ancestors are
+            // the /var/mobile/Containers chain, which is the actual research
+            // surface; the fixed target list cannot reach them because they are
+            // only known at runtime. The ascent is read-only.
+            ascendFrom: documentsDirectory()?
+                .deletingLastPathComponent().path
         )
 
         var files: [ExportedFile] = []

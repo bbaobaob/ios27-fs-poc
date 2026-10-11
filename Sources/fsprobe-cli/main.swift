@@ -20,6 +20,7 @@ struct Options {
     var textPath: String?
     var targetFilter: String = "all" // all | baseline | comma-separated paths
     var recordEntryNames: Bool = false
+    var ascendFrom: String?
 }
 
 func parseArguments(_ args: [String]) -> Options {
@@ -42,6 +43,9 @@ func parseArguments(_ args: [String]) -> Options {
             if index < args.count { options.targetFilter = args[index] }
         case "--record-entry-names":
             options.recordEntryNames = true
+        case "--ascend":
+            index += 1
+            if index < args.count { options.ascendFrom = args[index] }
         default:
             FileHandle.standardError.write("unknown argument: \(arg)\n".data(using: .utf8)!)
         }
@@ -82,7 +86,8 @@ let environment = CapabilityMatrix.EnvironmentRecord(
 let matrix = MatrixRunner().run(
     targets: targets,
     recordEntryNames: options.recordEntryNames,
-    environment: environment
+    environment: environment,
+    ascendFrom: options.ascendFrom
 )
 
 print(ReportExporter.text(matrix, targets: targets))

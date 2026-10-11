@@ -49,6 +49,25 @@ public enum ReportExporter {
             lines.append(line)
         }
 
+        if !matrix.ancestors.isEmpty {
+            lines.append("")
+            lines.append("Ancestor ascent (read-only: lstat / opendir / readdir):")
+            for step in matrix.ancestors {
+                let detail = step.fullyVisible
+                    ? "visible"
+                    : "lstat=\(step.lstat.rawValue) opendir=\(step.openDirectory.rawValue) readdir=\(step.enumerate.rawValue)"
+                let entries = step.entryCount.map { " (\($0) entries)" } ?? ""
+                let errno = step.errnoName.map { " [\($0)]" } ?? ""
+                lines.append("  \(step.depth) \(step.path) — \(detail)\(entries)\(errno)")
+                if let reason = step.stopReason {
+                    lines.append("      stopped: \(reason)")
+                }
+            }
+            if let boundary = AncestorProbe.boundary(in: matrix.ancestors) {
+                lines.append("  boundary: first not-fully-visible ancestor is depth \(boundary.depth) (\(boundary.path))")
+            }
+        }
+
         lines.append("")
         lines.append("Discrepancies:")
         let discrepancies = matrix.discrepancies()
@@ -67,11 +86,13 @@ public enum ReportExporter {
         let schema: String
         let environment: CapabilityMatrix.EnvironmentRecord
         let results: [ProbeResult]
+        let ancestors: [AncestorStep]
 
         init(matrix: CapabilityMatrix) {
-            self.schema = "fsprobe.capability-matrix.v1"
+            self.schema = "fsprobe.capability-matrix.v2"
             self.environment = matrix.environment
             self.results = matrix.results
+            self.ancestors = matrix.ancestors
         }
     }
 }
