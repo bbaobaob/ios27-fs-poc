@@ -161,6 +161,30 @@ public enum ReportExporter {
             }
         }
 
+        for (label, scope) in [("while the scope is held", matrix.securityScope),
+                               ("after the scope was released", matrix.securityScopeAfterRelease)] {
+            guard let scope else { continue }
+            lines.append("")
+            lines.append("User-granted scope (\(label)):")
+            lines.append("  granted:  \(scope.grantedPath)")
+            lines.append("  resolved: \(scope.resolvedPath)")
+            lines.append("  active:   \(scope.scopeActive)")
+            for experiment in scope.experiments {
+                let flag = experiment.isBoundaryViolation ? "  <-- BOUNDARY VIOLATION" : ""
+                lines.append("  [\(experiment.outcome.rawValue)] \(experiment.id)\(flag)")
+                lines.append("      \(experiment.operation)  args: \(experiment.arguments)")
+                if let errno = experiment.errnoName {
+                    lines.append("      errno: \(errno) (\(experiment.errnoNumber))")
+                }
+                lines.append("      result: \(experiment.interpretation)")
+            }
+            if !scope.violations.isEmpty {
+                lines.append("  VIOLATIONS: \(scope.violations.map { $0.id }.joined(separator: ", "))")
+            } else {
+                lines.append("  no experiment succeeded where the grant should have refused it")
+            }
+        }
+
         if !matrix.boundaryExperiments.isEmpty {
             lines.append("")
             lines.append("Boundary-mechanism experiments:")
@@ -200,9 +224,11 @@ public enum ReportExporter {
         let sandboxProfile: SandboxProfileProbe.Result?
         let containerWrite: ContainerWriteProbe.Result?
         let inodeOpen: InodeOpenProbe.Result?
+        let securityScope: SecurityScopeProbe.Result?
+        let securityScopeAfterRelease: SecurityScopeProbe.Result?
 
         init(matrix: CapabilityMatrix) {
-            self.schema = "fsprobe.capability-matrix.v5"
+            self.schema = "fsprobe.capability-matrix.v6"
             self.environment = matrix.environment
             self.results = matrix.results
             self.ancestors = matrix.ancestors
@@ -210,6 +236,8 @@ public enum ReportExporter {
             self.sandboxProfile = matrix.sandboxProfile
             self.containerWrite = matrix.containerWrite
             self.inodeOpen = matrix.inodeOpen
+            self.securityScope = matrix.securityScope
+            self.securityScopeAfterRelease = matrix.securityScopeAfterRelease
         }
     }
 }

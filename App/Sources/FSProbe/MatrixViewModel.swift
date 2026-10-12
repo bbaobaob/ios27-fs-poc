@@ -54,8 +54,91 @@ enum MarkShape: Sendable {
     case triangle
     /// Diamond — failed with some other errno.
     case diamond
+    /// Stop-sign octagon with a slash — a granted scope reached something it
+    /// should not have. The silhouette is unique to this mark, so the finding is
+    /// legible in greyscale and never depends on its hue.
+    case breach
     /// Faint dashed box — no result was recorded for this cell.
     case unrecorded
+}
+
+// MARK: - Security-scoped grant verdicts
+
+/// What one grant experiment means, read against what the grant policy predicts.
+///
+/// The matrix maps an outcome to a hue. This section has to do more: here a
+/// *denial is the passing outcome*, so hue can no longer mean "good or bad" on
+/// its own. Instead the shape always carries the verdict and the hue only says
+/// whether the verdict was the expected one — and the verdict is always spelled
+/// out in text next to the mark, so neither channel is ever load-bearing.
+enum ScopeVerdict: String, Sendable, CaseIterable {
+    /// Refused, and refusal is what the grant policy requires. The boundary held.
+    case held
+    /// Permitted, and permission is what the grant policy requires.
+    case granted
+    /// Permitted where the grant policy requires a refusal. The finding.
+    case overGrant
+    /// The control was refused: the grant never took effect, so the rest of the
+    /// battery is not interpretable.
+    case grantFailed
+    /// The experiment's precondition failed. Nothing was observed.
+    case notApplicable
+    /// The experiment itself failed.
+    case failed
+
+    var title: String {
+        switch self {
+        case .held: return "HELD"
+        case .granted: return "GRANTED"
+        case .overGrant: return "VIOLATION"
+        case .grantFailed: return "NO GRANT"
+        case .notApplicable: return "N/A"
+        case .failed: return "FAILED"
+        }
+    }
+
+    var meaning: String {
+        switch self {
+        case .held:
+            return "Refused where the grant policy requires a refusal. The scope is confined."
+        case .granted:
+            return "Permitted where permission was the prediction."
+        case .overGrant:
+            return "Permitted where the grant policy requires a refusal. The scope reached further than the item the user chose."
+        case .grantFailed:
+            return "The control was refused, so the grant never took effect and nothing else in this battery can be read."
+        case .notApplicable:
+            return "The experiment's precondition failed, so no observation was made."
+        case .failed:
+            return "The experiment itself failed."
+        }
+    }
+
+    /// Whether this verdict is the outcome the grant policy predicts.
+    var isExpected: Bool {
+        switch self {
+        case .held, .granted, .notApplicable: return true
+        case .overGrant, .grantFailed, .failed: return false
+        }
+    }
+
+    var family: OutcomeFamily {
+        isExpected ? .success : .denial
+    }
+
+    var shape: MarkShape {
+        switch self {
+        case .held: return .blocked
+        case .granted: return .disc
+        case .overGrant: return .breach
+        // The control came back refused and the denial is not the passing
+        // outcome, so it stays amber rather than red: it is a broken
+        // experiment, not a broken boundary.
+        case .grantFailed: return .barred
+        case .notApplicable: return .dashedRing
+        case .failed: return .diamond
+        }
+    }
 }
 
 // MARK: - Row / cell models
@@ -338,6 +421,147 @@ final class MatrixViewModel {
         return value.isEmpty ? nil : value
     }
 
+    // MARK: Security-scoped grant
+
+    /// The document-picker grant lifecycle.
+    ///
+    /// `.complete` is the only case that carries results, so the view can only
+    /// ever render a result it actually holds. A cancelled picker is not a
+    /// failure — it returns to `.idle`.
+    enum GrantState: Sendable {
+        case idle        // nothing granted yet
+        case picking     // the document picker is on screen
+        case probing     // the scope is being probed while held
+        case complete(granted: SecurityScopeProbe.Result, afterRelease: SecurityScopeProbe.Result)
+        /// A real failure, with the message exactly as it happened.
+        case failed(String)
+    }
+
+    private(set) var grantState: GrantState = .idle
+
+    /// The battery run while the scope was held, or nil when there is none.
+    var grantedScopeResult: SecurityScopeProbe.Result? {
+        if case .complete(let granted, _) = grantState { return granted }
+        return nil
+    }
+
+    /// The battery run after the scope was released, or nil when there is none.
+    var afterReleaseResult: SecurityScopeProbe.Result? {
+        if case .complete(_, let afterRelease) = grantState { return afterRelease }
+        return nil
+    }
+
+    /// Violations from both phases, scope-held first, deduplicated by id. The
+    /// headline finding, when there is one.
+    var grantViolations: [SecurityScopeProbe.Experiment] {
+        var seen = Set<String>()
+        var found: [SecurityScopeProbe.Experiment] = []
+        for result in [grantedScopeResult, afterReleaseResult] {
+            guard let result else { continue }
+            for experiment in result.experiments where experiment.isBoundaryViolation {
+                if seen.insert(experiment.id).inserted { found.append(experiment) }
+            }
+        }
+        return found
+    }
+
+    var isGrantBusy: Bool {
+        switch grantState {
+        case .picking, .probing: return true
+        case .idle, .complete, .failed: return false
+        }
+    }
+
+    var grantStatusLabel: String {
+        switch grantState {
+        case .idle: return "IDLE"
+        case .picking: return "PICKING"
+        case .probing: return "PROBING"
+        case .complete: return grantViolations.isEmpty ? "CONFINED" : "VIOLATION"
+        case .failed: return "FAILED"
+        }
+    }
+
+    /// Equatable projection of the lifecycle, for animation triggers.
+    var grantStage: Int {
+        switch grantState {
+        case .idle: return 0
+        case .picking: return 1
+        case .probing: return 2
+        case .complete: return 3
+        case .failed: return 4
+        }
+    }
+
+    // MARK: Grant control
+
+    /// The user asked for a directory. Nothing has been granted yet.
+    @MainActor
+    func beginPicking() {
+        guard !isGrantBusy else { return }
+        grantState = .picking
+    }
+
+    /// The picker closed without a selection. Not an error: it is simply idle.
+    @MainActor
+    func pickerDidCancel() {
+        if case .picking = grantState { grantState = .idle }
+    }
+
+    /// The user chose a directory. The grant is taken here and released inside
+    /// `probeGrant`, after the first battery has finished.
+    @MainActor
+    func grantSelected(_ url: URL) {
+        guard !isGrantBusy else { return }
+
+        // Opened here rather than inside the probe task, so a grant that never
+        // takes effect is reported at the moment it is discovered. Every
+        // experiment would come back denied and none of that would say
+        // anything about the boundary, so this is surfaced as the real failure
+        // it is instead of being dressed up as a clean result.
+        guard url.startAccessingSecurityScopedResource() else {
+            grantState = .failed(
+                """
+                startAccessingSecurityScopedResource() returned false for \(url.path), so the \
+                security scope never opened and no probe was run. Every experiment would \
+                have reported a denial that says nothing about where the grant reaches.
+                """
+            )
+            return
+        }
+
+        grantState = .probing
+        Task { await probeGrant(url) }
+    }
+
+    /// Probe the extent of the scope, release it, then probe again.
+    ///
+    /// Main-actor throughout except the two batteries, which are detached
+    /// because each one is a burst of syscalls that would otherwise stall the
+    /// frame the user is watching. The caller must already have opened the
+    /// scope; this method owns releasing it.
+    @MainActor
+    private func probeGrant(_ url: URL) async {
+        let path = url.path
+
+        // The scope is deliberately held across the `await` below: the first
+        // battery only means anything while the grant is live, and the release
+        // is not reached until it has returned.
+        let granted = await Task.detached(priority: .userInitiated) {
+            SecurityScopeProbe.probe(grantedPath: path)
+        }.value
+
+        url.stopAccessingSecurityScopedResource()
+
+        // Every experiment in this battery expects a denial, so it turns entirely
+        // on whether the scope really stopped.
+        let afterRelease = await Task.detached(priority: .userInitiated) {
+            SecurityScopeProbe.probeAfterRelease(grantedPath: path)
+        }.value
+
+        grantState = .complete(granted: granted, afterRelease: afterRelease)
+    }
+
     // MARK: Small helpers
 
     /// Preserves the POSIX domain and code, which is the part worth recording.
@@ -352,5 +576,42 @@ final class MatrixViewModel {
         } catch {
             return 0
         }
+    }
+}
+
+// MARK: - Grant results, read for display
+
+extension SecurityScopeProbe.Experiment {
+    /// The verdict this observation earns once it is read against the grant
+    /// policy. `isBoundaryViolation` is deliberately not consulted here: the
+    /// core already defines it, and duplicating the rule would be a second place
+    /// for it to drift.
+    var verdict: ScopeVerdict {
+        switch outcome {
+        case .permitted:      return expectedDenied ? .overGrant : .granted
+        case .denied:         return expectedDenied ? .held : .grantFailed
+        case .notApplicable:  return .notApplicable
+        case .error:          return .failed
+        }
+    }
+
+    /// "EPERM (1)", or the bare number when no symbolic name was recorded.
+    /// Never a substitute name.
+    var errnoHeadline: String {
+        guard let name = errnoName, !name.isEmpty else {
+            return "errno \(errnoNumber) (no symbolic name recorded)"
+        }
+        return "\(name) (\(errnoNumber))"
+    }
+}
+
+extension SecurityScopeProbe.Result {
+    func count(of verdict: ScopeVerdict) -> Int {
+        experiments.filter { $0.verdict == verdict }.count
+    }
+
+    /// 0 of the battery produced any observation at all.
+    var observedCount: Int {
+        experiments.count - count(of: .notApplicable)
     }
 }

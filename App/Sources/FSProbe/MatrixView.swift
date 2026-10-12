@@ -16,6 +16,7 @@ import FSProbeCore
 
 import SwiftUI
 import UIKit
+import UniformTypeIdentifiers
 
 // MARK: - Screen
 
@@ -32,6 +33,10 @@ struct MatrixView: View {
             ScrollView {
                 VStack(spacing: 16) {
                     InstrumentHeader(model: model)
+                    // The grant control sits above the run controls on purpose:
+                    // it is the only thing on this screen that needs the user to
+                    // do something, and it is the whole reason this build exists.
+                    GrantPanel(model: model)
                     RunControlBar(model: model, isExporting: $isExporting)
 
                     if !model.issues.isEmpty {
@@ -294,7 +299,703 @@ private struct ScanningBar: View {
     }
 }
 
-// MARK: - Write failures
+// MARK: - Document picker grant
+
+/// The grant control, and the evidence it produced.
+///
+/// Placement: directly under the header and above the matrix, because it is the
+/// only thing on this screen that needs the user to act. Every value rendered
+/// below comes from `SecurityScopeProbe`; nothing here infers an outcome, and
+/// the results are reachable only through `.complete`, which is the only case
+/// that carries them.
+private struct GrantPanel: View {
+    let model: MatrixViewModel
+
+    @State private var isPresentingPicker = false
+
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            header
+            grantButton
+
+            explainer
+
+            if model.isGrantBusy {
+                inFlight
+            }
+
+            switch model.grantState {
+            case .failed(let message):
+                GrantFailurePanel(message: message)
+            case .complete(let granted, let afterRelease):
+                GrantResults(granted: granted, afterRelease: afterRelease)
+            case .idle, .picking, .probing:
+                EmptyView()
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Panel.background(scheme))
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(hasViolation ? OutcomeFamily.denial.color(in: scheme) : Hairline.color(scheme),
+                        lineWidth: hasViolation ? 1.8 : 1)
+        )
+        .animation(.easeOut(duration: 0.22), value: model.grantStage)
+    }
+
+    private var hasViolation: Bool { !model.grantViolations.isEmpty }
+
+    private var header: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text("DOCUMENT PICKER GRANT")
+                    .font(.system(size: 11.5, weight: .bold, design: .monospaced))
+                    .tracking(1.2)
+                Text("does the grant reach further than the folder you pick?")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 8)
+            GrantStatusPill(model: model)
+        }
+    }
+
+    /// Attached to this control's own modifier chain, because a third `.sheet`
+    /// stacked onto one of the screen's existing sheets silently stops being
+    /// presented.
+    private var grantButton: some View {
+        Button {
+            model.beginPicking()
+            isPresentingPicker = true
+        } label: {
+            GrantButtonLabel(isBusy: model.isGrantBusy)
+        }
+        .buttonStyle(.plain)
+        .disabled(model.isGrantBusy)
+        .accessibilityLabel("Grant access to a directory")
+        .accessibilityHint("Opens Files so you can choose a folder. FSProbe then tests whether that grant reaches anything beyond the folder you chose.")
+        .sheet(isPresented: $isPresentingPicker) {
+            FolderPicker(
+                isPresented: $isPresentingPicker,
+                onPick: { url in
+                    Task { @MainActor in model.grantSelected(url) }
+                },
+                onCancel: {
+                    Task { @MainActor in model.pickerDidCancel() }
+                }
+            )
+            .ignoresSafeArea()
+        }
+    }
+
+    /// Shown whenever there is no result to read, so the control is never a
+    /// button with no explanation attached to it and a failure never leaves the
+    /// user without context.
+    @ViewBuilder
+    private var explainer: some View {
+        switch model.grantState {
+        case .idle, .failed:
+            VStack(alignment: .leading, spacing: 5) {
+                Text("Choose a folder in Files. FSProbe receives a security-scoped URL for it, then tests whether the grant reaches past it — the folder's parent, a `..` escape, a symlink pointing out of it, or a write into it — and then again after the scope is released.")
+                    .font(.system(size: 10.5))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                HairlineRule(axis: .horizontal)
+                Text("The only writes are one synthetic file and one symlink, both inside the folder you pick, and both removed immediately.")
+                    .font(.system(size: 9.5, design: .monospaced))
+                    .foregroundStyle(.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        case .picking, .probing, .complete:
+            EmptyView()
+        }
+    }
+
+    private var inFlight: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                ProgressView().controlSize(.small)
+                Text(inFlightLabel)
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .tracking(0.8)
+                    .foregroundStyle(OutcomeFamily.other.color(in: scheme))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            ScanningBar()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(10)
+        .background(RowShade.alternate(scheme))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Hairline.color(scheme), lineWidth: 1))
+    }
+
+    private var inFlightLabel: String {
+        switch model.grantState {
+        case .picking: return "PICKER OPEN — CHOOSE A FOLDER, OR CANCEL TO RETURN TO IDLE"
+        case .probing: return "PROBING — SCOPE HELD, THEN RELEASED AND RETESTED"
+        case .idle, .complete, .failed: return ""
+        }
+    }
+}
+
+/// The one control a first-time user has to find. High-contrast inverse fill,
+/// so it reads as the primary action without adding a fifth hue to a palette
+/// where green, red, grey and amber already carry data meaning.
+private struct GrantButtonLabel: View {
+    let isBusy: Bool
+
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        HStack(spacing: 10) {
+            ZStack(alignment: .bottomTrailing) {
+                Image(systemName: "folder.fill")
+                    .font(.system(size: 15, weight: .semibold))
+                    .frame(width: 30, height: 30)
+                Image(systemName: isBusy ? "hourglass" : "plus.circle.fill")
+                    .font(.system(size: 10, weight: .bold))
+            }
+            .frame(width: 30, height: 30)
+            .background(RoundedRectangle(cornerRadius: 7).fill(ink.opacity(0.14)))
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(isBusy ? "GRANT IN FLIGHT" : "GRANT ACCESS TO A DIRECTORY")
+                    .font(.system(size: 12.5, weight: .bold, design: .monospaced))
+                    .tracking(0.8)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(isBusy ? "waiting for the picker, or for the probe" : "Pick a folder in Files")
+                    .font(.system(size: 10))
+                    .opacity(0.72)
+            }
+
+            Spacer(minLength: 6)
+
+            Image(systemName: "chevron.right")
+                .font(.system(size: 11, weight: .bold))
+                .opacity(0.8)
+        }
+        .foregroundStyle(ink)
+        .multilineTextAlignment(.leading)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 11)
+        .frame(maxWidth: .infinity)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(
+                    LinearGradient(
+                        colors: [faceTop, faceBottom],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10).stroke(Hairline.color(scheme), lineWidth: 1)
+        )
+        .opacity(isBusy ? 0.6 : 1)
+        .animation(.easeOut(duration: 0.15), value: isBusy)
+    }
+
+    private var faceTop: Color {
+        scheme == .dark ? Color.white.opacity(0.96) : Color(red: 0.16, green: 0.18, blue: 0.24)
+    }
+
+    private var faceBottom: Color {
+        scheme == .dark ? Color.white.opacity(0.80) : Color(red: 0.06, green: 0.07, blue: 0.11)
+    }
+
+    private var ink: Color {
+        scheme == .dark ? Color(red: 0.05, green: 0.06, blue: 0.09) : Color.white
+    }
+}
+
+private struct GrantStatusPill: View {
+    let model: MatrixViewModel
+
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        HStack(spacing: 5) {
+            OutcomeMark(family: family, shape: shape)
+                .frame(width: 8, height: 8)
+            Text(model.grantStatusLabel)
+                .font(.system(size: 9.5, weight: .bold, design: .monospaced))
+                .tracking(1)
+                .foregroundStyle(family.color(in: scheme))
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(Capsule().fill(Hairline.color(scheme)))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Grant status: \(model.grantStatusLabel)")
+    }
+
+    private var family: OutcomeFamily {
+        switch model.grantState {
+        case .idle: return .absent
+        case .picking, .probing: return .other
+        case .complete: return model.grantViolations.isEmpty ? .success : .denial
+        case .failed: return .denial
+        }
+    }
+
+    private var shape: MarkShape {
+        switch model.grantState {
+        case .idle: return .dashedRing
+        case .picking: return .triangle
+        case .probing: return .diamond
+        case .complete: return model.grantViolations.isEmpty ? .disc : .breach
+        case .failed: return .barred
+        }
+    }
+}
+
+// MARK: Grant results
+
+private struct GrantResults: View {
+    let granted: SecurityScopeProbe.Result
+    let afterRelease: SecurityScopeProbe.Result
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            GrantRecordBlock(result: granted)
+
+            if !violations.isEmpty {
+                ViolationBanner(experiments: violations)
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                PanelLabel("SCOPE HELD — \(granted.experiments.count) EXPERIMENTS", tint: nil)
+                ForEach(granted.experiments) { experiment in
+                    ScopeExperimentCard(experiment: experiment)
+                }
+            }
+
+            AfterReleaseGroup(result: afterRelease)
+
+            VerdictLegend()
+        }
+    }
+
+    /// Scope-held experiments first, then after-release, so the reading order
+    /// matches the sequence the harness actually ran.
+    private var violations: [SecurityScopeProbe.Experiment] {
+        granted.experiments.filter { $0.isBoundaryViolation }
+            + afterRelease.experiments.filter { $0.isBoundaryViolation }
+    }
+}
+
+private struct GrantRecordBlock: View {
+    let result: SecurityScopeProbe.Result
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            PanelLabel("GRANT RECORD", tint: nil)
+            EvidenceLine(label: "granted", value: result.grantedPath, truncatesMiddle: true)
+            EvidenceLine(label: "resolved", value: result.resolvedPath, truncatesMiddle: true)
+            EvidenceLine(label: "scope", value: scopeText)
+            HairlineRule(axis: .horizontal)
+            HStack(spacing: 8) {
+                Tally(shape: .disc, family: .success, count: result.count(of: .granted))
+                Tally(shape: .blocked, family: .success, count: result.count(of: .held))
+                if result.count(of: .notApplicable) > 0 {
+                    Tally(shape: .dashedRing, family: .absent, count: result.count(of: .notApplicable))
+                }
+                if result.count(of: .grantFailed) > 0 {
+                    Tally(shape: .barred, family: .other, count: result.count(of: .grantFailed))
+                }
+                if result.count(of: .failed) > 0 {
+                    Tally(shape: .diamond, family: .other, count: result.count(of: .failed))
+                }
+                Spacer(minLength: 0)
+                Text("\(result.observedCount)/\(result.experiments.count) observed")
+                    .font(.system(size: 9.5, design: .monospaced))
+                    .foregroundStyle(.tertiary)
+            }
+        }
+    }
+
+    private var scopeText: String {
+        result.scopeActive
+            ? "held for the duration of this battery"
+            : "not held during this battery"
+    }
+}
+
+/// Label, value, monospace, selectable. Long values truncate in the middle so
+/// both ends of a path stay readable; the truncation is a rendering decision
+/// only, so the selected and copied text is always the whole value.
+private struct EvidenceLine: View {
+    let label: String
+    let value: String
+    var truncatesMiddle: Bool = false
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            ScaledMono(text: label, base: 9, weight: .semibold, tracking: 0.8, colour: .secondary)
+                .frame(width: 52, alignment: .leading)
+            ScaledMono(
+                text: value,
+                base: truncatesMiddle ? 10.5 : 10,
+                selectable: true,
+                lineLimit: truncatesMiddle ? 2 : nil,
+                truncation: truncatesMiddle ? .middle : .tail
+            )
+            Spacer(minLength: 0)
+        }
+        .contextMenu {
+            Button {
+                UIPasteboard.general.string = value
+            } label: {
+                Label("Copy full value", systemImage: "doc.on.doc")
+            }
+        }
+    }
+}
+
+/// The finding, when there is one. Loud on purpose: this is the single result
+/// the whole project exists to produce, so it gets the heaviest border on the
+/// screen, its own silhouette, and the experiment ids spelled out.
+private struct ViolationBanner: View {
+    let experiments: [SecurityScopeProbe.Experiment]
+
+    @Environment(\.colorScheme) private var scheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var hasStruck = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top, spacing: 8) {
+                OutcomeMark(family: .denial, shape: .breach)
+                    .frame(width: 15, height: 15)
+                    .scaleEffect(hasStruck ? 1 : 1.3)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("BOUNDARY VIOLATION")
+                        .font(.system(size: 12, weight: .heavy, design: .monospaced))
+                        .tracking(1.4)
+                    Text("\(experiments.count) experiment\(experiments.count == 1 ? "" : "s") succeeded where the grant policy requires a refusal.")
+                        .font(.system(size: 10))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(OutcomeFamily.denial.color(in: scheme))
+
+            HairlineRule(axis: .horizontal)
+
+            ForEach(experiments) { experiment in
+                VStack(alignment: .leading, spacing: 2) {
+                    ScaledMono(
+                        text: experiment.id,
+                        base: 11.5,
+                        weight: .bold,
+                        colour: OutcomeFamily.denial.color(in: scheme)
+                    )
+                    ScaledMono(text: experiment.interpretation.collapsed, base: 10.5, selectable: true)
+                    ScaledMono(
+                        text: "\(experiment.operation) · \(experiment.arguments)",
+                        base: 9.5,
+                        colour: .secondary,
+                        selectable: true,
+                        lineLimit: 2,
+                        truncation: .middle
+                    )
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(OutcomeFamily.denial.color(in: scheme).opacity(0.12))
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(OutcomeFamily.denial.color(in: scheme), lineWidth: 2)
+        )
+        .onAppear {
+            // One strike when the finding reaches the screen: the mark settles
+            // from oversized to rest and stays there. No autoreversing repeat —
+            // that would land it back at the oversized value and leave it there.
+            guard !reduceMotion else { return }
+            withAnimation(.easeOut(duration: 0.45)) {
+                hasStruck = true
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(
+            "Boundary violation. \(experiments.map(\.id).joined(separator: ", "))."
+        )
+    }
+}
+
+/// Everything that was measured once the scope was released. Set apart from
+/// the held battery by a dashed frame, because the scope behind it is gone.
+private struct AfterReleaseGroup: View {
+    let result: SecurityScopeProbe.Result
+
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            PanelLabel("AFTER RELEASE", tint: nil)
+
+            Text("stopAccessingSecurityScopedResource() was called. Every experiment below expects a denial, so a path that is still readable means the grant outlived its scope.")
+                .font(.system(size: 10))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            EvidenceLine(label: "granted", value: result.grantedPath, truncatesMiddle: true)
+            EvidenceLine(label: "resolved", value: result.resolvedPath, truncatesMiddle: true)
+
+            ForEach(result.experiments) { experiment in
+                ScopeExperimentCard(experiment: experiment)
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 12).fill(Panel.background(scheme).opacity(0.45)))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Hairline.color(scheme), style: StrokeStyle(lineWidth: 1.2, dash: [5, 3]))
+        )
+    }
+}
+
+private struct ScopeExperimentCard: View {
+    let experiment: SecurityScopeProbe.Experiment
+
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        let verdict = experiment.verdict
+        let isViolation = experiment.isBoundaryViolation
+
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .top, spacing: 8) {
+                OutcomeMark(family: verdict.family, shape: verdict.shape)
+                    .frame(width: 11, height: 11)
+                    .padding(.top, 2)
+                VStack(alignment: .leading, spacing: 1) {
+                    ScaledMono(text: experiment.id, base: 12, weight: .bold)
+                    ScaledMono(text: experiment.operation, base: 9.5, colour: .secondary)
+                }
+                Spacer(minLength: 6)
+                VStack(alignment: .trailing, spacing: 1) {
+                    ScaledMono(
+                        text: verdict.title,
+                        base: 10.5,
+                        weight: .bold,
+                        tracking: 0.6,
+                        colour: verdict.family.color(in: scheme)
+                    )
+                    // The core's own raw outcome, never replaced by the verdict.
+                    ScaledMono(text: experiment.outcome.rawValue, base: 9.5, colour: .secondary)
+                }
+            }
+
+            ScaledMono(text: experiment.interpretation.collapsed, base: 10.5, selectable: true)
+
+            EvidenceLine(label: "expected", value: experiment.expected.collapsed)
+            EvidenceLine(label: "mechanism", value: experiment.mechanism.collapsed)
+            EvidenceLine(label: "argument", value: experiment.arguments, truncatesMiddle: true)
+            EvidenceLine(label: "errno", value: errnoText)
+
+            if isViolation {
+                HStack(alignment: .top, spacing: 6) {
+                    OutcomeMark(family: .denial, shape: .breach)
+                        .frame(width: 8, height: 8)
+                        .padding(.top, 1.5)
+                    Text("BOUNDARY VIOLATION — this succeeded where the grant policy requires a refusal")
+                        .font(.system(size: 9.5, weight: .bold, design: .monospaced))
+                        .tracking(0.6)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .foregroundStyle(OutcomeFamily.denial.color(in: scheme))
+            }
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(isViolation
+                      ? OutcomeFamily.denial.color(in: scheme).opacity(0.10)
+                      : Panel.background(scheme).opacity(0.55))
+        )
+        .overlay(alignment: .leading) {
+            // A position cue as well as a hue cue: the violated cards carry a
+            // rail down their leading edge that the others do not.
+            if isViolation {
+                UnevenRoundedRectangle(
+                    topLeadingRadius: 10,
+                    bottomLeadingRadius: 10,
+                    style: .continuous
+                )
+                .fill(OutcomeFamily.denial.color(in: scheme))
+                .frame(width: 3.5)
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(
+                    isViolation ? OutcomeFamily.denial.color(in: scheme) : Hairline.color(scheme),
+                    lineWidth: isViolation ? 1.8 : 1
+                )
+        )
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(accessibilityLabel)
+    }
+
+    /// Honest per outcome: "no errno" and "never attempted" are different facts.
+    private var errnoText: String {
+        if let name = experiment.errnoName, !name.isEmpty {
+            return "\(name) (\(experiment.errnoNumber))"
+        }
+        switch experiment.outcome {
+        case .permitted: return "none — the call returned success, so no errno was set"
+        case .denied, .error: return experiment.errnoHeadline
+        case .notApplicable: return "not attempted — the experiment's precondition failed"
+        }
+    }
+
+    private var accessibilityLabel: String {
+        let errno = errnoText
+        return "\(experiment.id). \(experiment.operation). Outcome \(experiment.outcome.rawValue). \(errno). \(experiment.verdict.title). \(experiment.interpretation.collapsed)"
+    }
+}
+
+/// A real failure, with the message exactly as it happened. Nothing is
+/// summarised away, and nothing is invented to fill the gap.
+private struct GrantFailurePanel: View {
+    let message: String
+
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                OutcomeMark(family: .denial, shape: .barred)
+                    .frame(width: 9, height: 9)
+                PanelLabel("GRANT FAILED", tint: .denial)
+            }
+            ScaledMono(text: message, base: 10.5, selectable: true)
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(OutcomeFamily.denial.color(in: scheme).opacity(0.10))
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(OutcomeFamily.denial.color(in: scheme), lineWidth: 1.5)
+        )
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Grant failed. \(message)")
+    }
+}
+
+/// The verdict key. It states the rule explicitly, because this section breaks
+/// the matrix's convention: here a denial is the passing outcome, so hue means
+/// "was this expected" and the shape means "what happened".
+private struct VerdictLegend: View {
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            PanelLabel("VERDICT KEY", tint: nil)
+            Text("The shape carries the verdict. Colour only says whether that verdict was the one the grant policy predicts.")
+                .font(.system(size: 9.5))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            LazyVGrid(
+                columns: [GridItem(.adaptive(minimum: 200), spacing: 6, alignment: .leading)],
+                alignment: .leading,
+                spacing: 6
+            ) {
+                ForEach(ScopeVerdict.allCases, id: \.self) { verdict in
+                    HStack(alignment: .top, spacing: 6) {
+                        OutcomeMark(family: verdict.family, shape: verdict.shape)
+                            .frame(width: 9, height: 9)
+                            .padding(.top, 1.5)
+                        VStack(alignment: .leading, spacing: 0) {
+                            ScaledMono(
+                                text: verdict.title,
+                                base: 9.5,
+                                weight: .bold,
+                                colour: verdict.family.color(in: scheme)
+                            )
+                            Text(verdict.meaning)
+                                .font(.system(size: 9.5))
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    .accessibilityElement(children: .combine)
+                }
+            }
+        }
+    }
+}
+
+// MARK: Grant typesetting
+
+/// Monospaced text at the instrument's optical size that still follows the
+/// user's Dynamic Type setting. The fixed sizes used elsewhere on this screen
+/// are chrome; the evidence in this section has to stay readable when the user
+/// makes it bigger.
+private struct ScaledMono: View {
+    @ScaledMetric(relativeTo: .caption) private var scale: CGFloat = 1
+
+    let text: String
+    var base: CGFloat = 11
+    var weight: Font.Weight = .regular
+    var tracking: CGFloat = 0
+    var colour: Color?
+    var selectable: Bool = false
+    var lineLimit: Int?
+    var truncation: Text.TruncationMode = .tail
+
+    var body: some View {
+        Text(text)
+            .font(.system(size: base * scale, weight: weight, design: .monospaced))
+            .tracking(tracking)
+            .multilineTextAlignment(.leading)
+            .foregroundStyle(colour.map { AnyShapeStyle($0) } ?? AnyShapeStyle(Color.primary))
+            .lineLimit(lineLimit)
+            .truncationMode(truncation)
+            .fixedSize(horizontal: false, vertical: true)
+            .textSelection(selectable ? .enabled : .disabled)
+    }
+}
+
+/// The core writes several strings as multi-line literals. Collapsing the line
+/// breaks keeps every word and drops only the layout the source file used.
+private extension String {
+    var collapsed: String {
+        split(whereSeparator: { $0.isNewline })
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+    }
+}
+
+// MARK: Write failures
 
 private struct IssuePanel: View {
     let issues: [String]
@@ -658,6 +1359,19 @@ struct OutcomeMark: View {
             TriangleShape().fill(hue)
         case .diamond:
             DiamondShape().fill(hue)
+        case .breach:
+            // A stop sign. The silhouette appears nowhere else in the app, so
+            // the one mark that means "this should not have been permitted" is
+            // recognisable from its shape alone.
+            OctagonShape()
+                .fill(hue)
+                .overlay {
+                    Rectangle()
+                        .fill(cutColour)
+                        .frame(width: 1.6)
+                        .rotationEffect(.degrees(45))
+                }
+                .clipShape(OctagonShape())
         case .unrecorded:
             RoundedRectangle(cornerRadius: 1.5)
                 .stroke(hue.opacity(0.5), style: StrokeStyle(lineWidth: 1, dash: [1.5, 1.5]))
@@ -687,6 +1401,25 @@ private struct DiamondShape: Shape {
         path.addLine(to: CGPoint(x: rect.maxX, y: rect.midY))
         path.addLine(to: CGPoint(x: rect.midX, y: rect.maxY))
         path.addLine(to: CGPoint(x: rect.minX, y: rect.midY))
+        path.closeSubpath()
+        return path
+    }
+}
+
+private struct OctagonShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        // Corners cut at the regular-octagon ratio, so the mark keeps its
+        // silhouette at the 9pt size it is used at in the matrix tallies.
+        let cut = min(rect.width, rect.height) * 0.2929
+        var path = Path()
+        path.move(to: CGPoint(x: rect.minX + cut, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX - cut, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY + cut))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - cut))
+        path.addLine(to: CGPoint(x: rect.maxX - cut, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.minX + cut, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY - cut))
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.minY + cut))
         path.closeSubpath()
         return path
     }
@@ -1100,4 +1833,73 @@ struct ShareSheet: UIViewControllerRepresentable {
     }
 
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
+}
+
+// MARK: - Folder picker
+
+/// The document picker, in folder mode.
+///
+/// `.folder` is the whole point of this control: granting a directory rather
+/// than a file is what makes the parent, sibling and `..` experiments mean
+/// anything. `asCopy: false` is equally deliberate — a copy would land in the
+/// app's own inbox and carry no security scope at all, which is the one thing
+/// this flow exists to test.
+///
+/// No usage-description string is needed: `UIDocumentPickerViewController` is a
+/// user-mediated pick, not a permission-gated API, and the app builds with
+/// `GENERATE_INFOPLIST_FILE = YES` so there is no plist to add one to anyway.
+///
+/// The sheet does not dismiss itself when hosted inside a SwiftUI sheet, so the
+/// coordinator writes `isPresented` back to close it on both paths.
+struct FolderPicker: UIViewControllerRepresentable {
+    @Binding var isPresented: Bool
+    let onPick: (URL) -> Void
+    let onCancel: () -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(isPresented: $isPresented, onPick: onPick, onCancel: onCancel)
+    }
+
+    func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
+        let picker = UIDocumentPickerViewController(
+            forOpeningContentTypes: [.folder],
+            asCopy: false
+        )
+        picker.delegate = context.coordinator
+        picker.allowsMultipleSelection = false
+        return picker
+    }
+
+    func updateUIViewController(_ uiViewController: UIDocumentPickerViewController, context: Context) {
+        context.coordinator.isPresented = $isPresented
+    }
+
+    final class Coordinator: NSObject, UIDocumentPickerDelegate {
+        var isPresented: Binding<Bool>
+        private let onPick: (URL) -> Void
+        private let onCancel: () -> Void
+
+        init(isPresented: Binding<Bool>, onPick: @escaping (URL) -> Void, onCancel: @escaping () -> Void) {
+            self.isPresented = isPresented
+            self.onPick = onPick
+            self.onCancel = onCancel
+        }
+
+        func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+            // An empty selection is not a pick and not a failure: there was
+            // nothing to grant, so it returns to idle.
+            guard let url = urls.first else {
+                isPresented.wrappedValue = false
+                onCancel()
+                return
+            }
+            isPresented.wrappedValue = false
+            onPick(url)
+        }
+
+        func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
+            isPresented.wrappedValue = false
+            onCancel()
+        }
+    }
 }

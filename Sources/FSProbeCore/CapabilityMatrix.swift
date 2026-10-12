@@ -34,6 +34,12 @@ public struct CapabilityMatrix: Sendable {
     /// traversal, which is the one code path that skips the lookup hook.
     public let inodeOpen: InodeOpenProbe.Result?
 
+    /// Results of testing whether a user-granted scope is confined to what the
+    /// user picked. Nil until the user grants access.
+    public let securityScope: SecurityScopeProbe.Result?
+    /// The same probe run after the scope was released.
+    public let securityScopeAfterRelease: SecurityScopeProbe.Result?
+
     public init(
         results: [ProbeResult],
         environment: EnvironmentRecord,
@@ -41,7 +47,9 @@ public struct CapabilityMatrix: Sendable {
         boundaryExperiments: [CrossBoundaryProbe.Experiment] = [],
         sandboxProfile: SandboxProfileProbe.Result? = nil,
         containerWrite: ContainerWriteProbe.Result? = nil,
-        inodeOpen: InodeOpenProbe.Result? = nil
+        inodeOpen: InodeOpenProbe.Result? = nil,
+        securityScope: SecurityScopeProbe.Result? = nil,
+        securityScopeAfterRelease: SecurityScopeProbe.Result? = nil
     ) {
         self.results = results
         self.environment = environment
@@ -50,6 +58,8 @@ public struct CapabilityMatrix: Sendable {
         self.sandboxProfile = sandboxProfile
         self.containerWrite = containerWrite
         self.inodeOpen = inodeOpen
+        self.securityScope = securityScope
+        self.securityScopeAfterRelease = securityScopeAfterRelease
     }
 
     /// Platform context captured at run time.
