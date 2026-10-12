@@ -396,3 +396,59 @@ file a privileged daemon trusts, sitting inside the app's own container.
 
 The experiment is non-destructive — it opens the file `O_WRONLY` and closes without
 writing a byte, so the contents are unchanged either way.
+
+---
+
+## Round 3: APFS clone — the last untested copy primitive
+
+Every earlier experiment copied a file by opening the source, reading its bytes,
+and writing them out. Each of those syscalls is individually authorized by the
+sandbox, which is why every attempt was refused with `EPERM`.
+
+`clonefile()` does not work that way. It asks the filesystem to clone the source
+vnode into the destination — a copy by inode, with no read or write of file
+contents at all. If the seatbelt profile is attached to the read and write
+operations but not to the clone operation, cloning a protected file into the app
+container yields its contents, and cloning a container file into a protected
+directory yields a file outside the sandbox. Either direction would be a boundary
+violation.
+
+### Simulator result (iOS 26.2)
+
+| Direction | Result |
+| --- | --- |
+| `clonefile(/usr/lib/dyld → container/Documents)` | denied, `EXDEV` (18) |
+| `clonefile(container/Documents → /var/tmp)` | **permitted** — the file was found at the destination |
+
+**The permitted result is a simulator artefact and is not a finding.** The iOS
+Simulator shares the macOS host filesystem, so `/var/tmp` there is the host's
+world-writable temporary directory rather than the iOS path the sandbox governs.
+The same shape of result was already recorded for `rename-cross-boundary` on the
+simulator and was later refuted on the device, where the same-volume rename was
+refused with `EPERM`. No sandbox escape is claimed.
+
+The inward direction returned `EXDEV`, a filesystem-level refusal — the simulator
+container and `/usr/lib/dyld` sit on different volumes, so it is not attributable
+to the sandbox either way. The device result is the interpretable one.
+
+### What is now conclusively established on the device
+
+| Mechanism | Result |
+| --- | --- |
+| Ancestor ascent from the container | `EPERM` at depth 1 |
+| `..` traversal through the container | `EPERM` |
+| Symlink inside the container pointing outside | `EPERM` |
+| `openat` with a container dirfd | `EPERM` |
+| `link()` from `/usr/lib/dyld` into the container | `EPERM` (real source file, not `ENOENT`) |
+| `rename()` to the container's parent (same volume) | `EPERM` |
+| `rename()` to `/var/tmp` (other volume) | `EXDEV` — not attributable |
+| `opendir`/`readdir` on `/var/mobile/Library` | `EPERM` |
+| `FileManager` (`getattrlistbulk`) on the same path | refused, `NSCocoaErrorDomain 257` |
+| `openbyid_np` on all nine `/var/` paths | `EPERM` |
+| Container write map | exactly the documented `tmp\|Library\|Documents` allowance |
+| `SystemData` | neither enumerable nor writable (`EPERM`) |
+
+Two hypotheses were closed with evidence rather than assumption: the enumeration
+differential (`opendir` and `getattrlistbulk` are both enforced) and the
+sandbox-profile extraction (the metadata plist is readable on the simulator but
+carries no `SandboxProfileData`, and on the device it is refused entirely).
