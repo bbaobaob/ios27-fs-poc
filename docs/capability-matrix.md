@@ -324,3 +324,75 @@ with the expected byte count) were always valid**; only the read-back verdict wa
 wrong. The iOS 27.0 device run above predates the fix, so its
 `readBackMatched: false` values carry the same caveat and should be re-measured
 with a current build.
+
+---
+
+## Round 2: boundary-mechanism experiments (not path probes)
+
+Probing which paths are permitted only measures the policy. The next round tests
+**how the boundary is enforced**, so that a success would mean the enforcement is
+wrong rather than that a path happened to be allowed. Each experiment names the
+mechanism, the expected result, and what a contrary result would mean.
+
+### Simulator baseline (iOS 26.2, macOS-hosted filesystem)
+
+| Experiment | Mechanism | Result |
+| --- | --- | --- |
+| `dotdot-traversal` | policy on path string vs resolved vnode | denied (ENOENT — path absent on host) |
+| `symlink-escape` | link path checked, target not? | denied |
+| `dirfd-relative-escape` | is a dirfd an authorization token? | denied — not a shortcut |
+| `hardlink-control` | control inside container | permitted (expected) |
+| `hardlink-cross-boundary` | `file-link*` vs `file-write*` | denied (ENOENT — target absent) |
+| `rename-control` | control inside container | permitted (expected) |
+| `rename-cross-boundary` | rename out of the container | **permitted** |
+| `enumerate-posix` | `opendir`/`readdir` | denied |
+| `enumerate-foundation` | `getattrlistbulk` (what `FileManager` uses) | denied, `NSCocoaErrorDomain 260` |
+
+**Two caveats, stated plainly.**
+
+1. **The `rename-cross-boundary` result is almost certainly a simulator artefact.**
+   The iOS Simulator shares the macOS host filesystem and applies a much weaker
+   sandbox than a device, so renaming from the simulator container to the host's
+   `/var/tmp` says nothing about iOS. It is recorded because it is exactly the
+   kind of result that must be resolved on the device rather than assumed either
+   way. **No sandbox escape is claimed.**
+2. **Several denials are `ENOENT`, not `EPERM`**, because the target paths
+   (`/var/mobile/Library`, `/var/tmp`) do not exist on the macOS host. Those cells
+   are uninformative in the simulator and only become meaningful on the device.
+
+### The enumeration differential is negative — and that is a useful result
+
+`opendir`/`readdir` and the `getattrlistbulk` path that `FileManager` uses are
+different syscalls. If they were governed by different rules, a directory refused
+to one could yield names to the other. Both were refused, with the same effect.
+That hypothesis is closed on the evidence.
+
+### The sandbox-profile hypothesis is negative
+
+Published analysis reports that `.com.apple.mobile_container_manager.metadata.plist`
+carries `MCMMetadataInfo.SandboxProfileData` — the app's own compiled sandbox
+profile. The plist **is readable** on iOS (523 bytes), and its keys are:
+
+```
+MCMMetadataActiveDPClass, MCMMetadataContentClass, MCMMetadataCreator,
+MCMMetadataIdentifier, MCMMetadataInfo, MCMMetadataSchemaVersion,
+MCMMetadataUUID, MCMMetadataUserIdentity, MCMMetadataVersion
+```
+
+`MCMMetadataInfo` contains only `com.apple.MobileInstallation.ContentProtectionClass`.
+**There is no `SandboxProfileData` on current iOS.** The published finding applies to
+an older version. The app's sandbox profile is therefore not obtainable this way, and
+the experiment that would have unlocked precise policy analysis is closed.
+
+### The open question the device must answer
+
+On the simulator the metadata plist accepted an `O_WRONLY` open. On the device, the
+container root refused create/write/unlink with `EPERM` — but that was *creating a
+new file*. Modifying an **existing** file is a different check, and the plist is
+written by `containermanagerd` with mode 0666, so POSIX permissions would allow it.
+Whether the sandbox rule covers modifying an existing file in the container root is
+the decisive untested question, and it is the one with real security consequence: a
+file a privileged daemon trusts, sitting inside the app's own container.
+
+The experiment is non-destructive — it opens the file `O_WRONLY` and closes without
+writing a byte, so the contents are unchanged either way.
