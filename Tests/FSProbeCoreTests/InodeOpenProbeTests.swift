@@ -49,6 +49,11 @@ final class InodeOpenProbeTests: XCTestCase {
         )
         let text = ReportExporter.text(matrix, targets: [])
         XCTAssertTrue(text.contains("Open-by-inode"), "the report must mention the experiment")
-        XCTAssertTrue(text.contains("/var/mobile"))
+        // With no symbol there are no attempts, so no per-path lines -- the
+        // report must say the experiment could not run rather than omit it.
+        XCTAssertTrue(
+            text.contains("could not run") || text.contains("not present"),
+            "the report must explain why there are no attempts"
+        )
     }
 }
