@@ -19,6 +19,9 @@
 //    statPath(_:followSymlink:into:) -> stat()/lstat()
 //    readLink(_:into:capacity:)  -> readlink(path, buf, capacity)
 //    unlinkFile(_:)              -> unlink(path)
+//    linkFile(_:_:)              -> link(source, destination)
+//    renameFile(_:_:)            -> rename(source, destination)
+//    fileSize(atPath:)           -> st_size via stat()
 //
 
 import Foundation

@@ -20,11 +20,15 @@ public struct MatrixRunner: Sendable {
     ///     experiment starting at this path. The app passes its own container,
     ///     which makes the ancestors the real research surface: on a device they
     ///     are the /var/mobile/Containers chain.
+    ///   - runBoundaryExperiments: when true, run the boundary-mechanism battery
+    ///     (path resolution, hard links, rename, enumeration differential) and
+    ///     read the app's own sandbox profile out of its container metadata.
     public func run(
         targets: [FSTarget],
         recordEntryNames: Bool = false,
         environment: CapabilityMatrix.EnvironmentRecord? = nil,
-        ascendFrom: String? = nil
+        ascendFrom: String? = nil,
+        runBoundaryExperiments: Bool = false
     ) -> CapabilityMatrix {
         var results: [ProbeResult] = []
         for target in targets {
@@ -43,6 +47,28 @@ public struct MatrixRunner: Sendable {
             deviceModel: "unknown"
         )
         let ancestors = ascendFrom.map { AncestorProbe.ascend(from: $0) } ?? []
-        return CapabilityMatrix(results: results, environment: env, ancestors: ancestors)
+
+        var boundary: [CrossBoundaryProbe.Experiment] = []
+        var profile: SandboxProfileProbe.Result?
+        if runBoundaryExperiments {
+            // The container is the app's own home; every experiment is scoped to
+            // it and to paths it cannot reach.
+            let container = ascendFrom ?? NSHomeDirectory()
+            boundary = CrossBoundaryProbe.runAll(containerPath: container)
+            let documents = FileManager.default
+                .urls(for: .documentDirectory, in: .userDomainMask).first
+            profile = SandboxProfileProbe.probe(
+                containerPath: container,
+                documentsDirectory: documents
+            )
+        }
+
+        return CapabilityMatrix(
+            results: results,
+            environment: env,
+            ancestors: ancestors,
+            boundaryExperiments: boundary,
+            sandboxProfile: profile
+        )
     }
 }

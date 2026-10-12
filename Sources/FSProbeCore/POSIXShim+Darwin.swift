@@ -99,5 +99,30 @@ extension POSIXShim {
             unlink(ptr)
         }
     }
+
+    /// `link(source, destination)` — creates a hard link.
+    public static func linkFile(_ source: String, _ destination: String) -> Int32 {
+        source.withCString { src in
+            destination.withCString { dst in
+                link(src, dst)
+            }
+        }
+    }
+
+    /// `rename(source, destination)`.
+    public static func renameFile(_ source: String, _ destination: String) -> Int32 {
+        source.withCString { src in
+            destination.withCString { dst in
+                rename(src, dst)
+            }
+        }
+    }
+
+    /// `st_size` for a path, or nil when stat() fails.
+    public static func fileSize(atPath path: String) -> Int64? {
+        var buffer = StatBuffer()
+        guard statPath(path, followSymlink: false, into: &buffer) == 0 else { return nil }
+        return buffer.size
+    }
 }
 #endif

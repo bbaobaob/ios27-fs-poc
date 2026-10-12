@@ -176,6 +176,7 @@ final class MatrixViewModel {
         environment: CapabilityMatrix.EnvironmentRecord
     ) -> RunReport {
         let started = Date()
+        let container = documentsDirectory()?.deletingLastPathComponent().path
         let matrix = MatrixRunner().run(
             targets: targets,
             recordEntryNames: true,
@@ -184,8 +185,11 @@ final class MatrixViewModel {
             // the /var/mobile/Containers chain, which is the actual research
             // surface; the fixed target list cannot reach them because they are
             // only known at runtime. The ascent is read-only.
-            ascendFrom: documentsDirectory()?
-                .deletingLastPathComponent().path
+            ascendFrom: container,
+            // Boundary-mechanism experiments plus the app's own sandbox profile,
+            // read out of its container metadata. These test how the boundary is
+            // enforced rather than which paths are permitted.
+            runBoundaryExperiments: true
         )
 
         var files: [ExportedFile] = []

@@ -68,6 +68,51 @@ public enum ReportExporter {
             }
         }
 
+        if let profile = matrix.sandboxProfile {
+            lines.append("")
+            lines.append("Sandbox profile (read from the app's own container metadata):")
+            lines.append("  readable:        \(profile.readable)")
+            lines.append("  metadata size:   \(profile.metadataSizeBytes.map { "\($0) bytes" } ?? "unknown")")
+            lines.append("  identifier:      \(profile.metadataIdentifier ?? "unknown")")
+            lines.append("  metadata keys:   \(profile.metadataKeys.joined(separator: ", "))")
+            lines.append("  MCMMetadataInfo: \(profile.infoKeys.joined(separator: ", "))")
+            lines.append("  has profile:     \(profile.hasSandboxProfileData)")
+            if let bytes = profile.sandboxProfileBytes {
+                lines.append("  profile size:    \(bytes) bytes")
+            }
+            if let digest = profile.sandboxProfileSHA256 {
+                lines.append("  profile sha256:  \(digest)")
+            }
+            lines.append("  parses as plist: \(profile.profileParsesAsPlist)")
+            if !profile.profileTopLevelKeys.isEmpty {
+                lines.append("  profile keys:    \(profile.profileTopLevelKeys.joined(separator: ", "))")
+            }
+            if let errno = profile.readErrnoName {
+                lines.append("  read errno:      \(errno)")
+            }
+            lines.append("  writable:        \(profile.writable)")
+            if let errno = profile.writeErrnoName {
+                lines.append("  write errno:     \(errno)")
+            }
+            lines.append("  note:            \(profile.note)")
+        }
+
+        if !matrix.boundaryExperiments.isEmpty {
+            lines.append("")
+            lines.append("Boundary-mechanism experiments:")
+            for experiment in matrix.boundaryExperiments {
+                let flag = experiment.isBoundaryViolation ? "  <-- BOUNDARY VIOLATION" : ""
+                lines.append("  [\(experiment.outcome.rawValue)] \(experiment.id)\(flag)")
+                lines.append("      mechanism: \(experiment.mechanism)")
+                lines.append("      operation: \(experiment.operation)  args: \(experiment.arguments)")
+                lines.append("      expected:  \(experiment.expected)")
+                if let errno = experiment.errnoName {
+                    lines.append("      errno:     \(errno) (\(experiment.errnoNumber))")
+                }
+                lines.append("      result:    \(experiment.interpretation)")
+            }
+        }
+
         lines.append("")
         lines.append("Discrepancies:")
         let discrepancies = matrix.discrepancies()
@@ -87,12 +132,16 @@ public enum ReportExporter {
         let environment: CapabilityMatrix.EnvironmentRecord
         let results: [ProbeResult]
         let ancestors: [AncestorStep]
+        let boundaryExperiments: [CrossBoundaryProbe.Experiment]
+        let sandboxProfile: SandboxProfileProbe.Result?
 
         init(matrix: CapabilityMatrix) {
-            self.schema = "fsprobe.capability-matrix.v2"
+            self.schema = "fsprobe.capability-matrix.v3"
             self.environment = matrix.environment
             self.results = matrix.results
             self.ancestors = matrix.ancestors
+            self.boundaryExperiments = matrix.boundaryExperiments
+            self.sandboxProfile = matrix.sandboxProfile
         }
     }
 }

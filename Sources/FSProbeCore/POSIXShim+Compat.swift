@@ -79,6 +79,12 @@ extension POSIXShim {
     @_silgen_name("readlink")
     private static func cReadlink(_ path: UnsafePointer<CChar>, _ buffer: UnsafeMutableRawPointer, _ size: Int) -> Int
 
+    @_silgen_name("link")
+    private static func cLink(_ source: UnsafePointer<CChar>, _ destination: UnsafePointer<CChar>) -> Int32
+
+    @_silgen_name("rename")
+    private static func cRename(_ source: UnsafePointer<CChar>, _ destination: UnsafePointer<CChar>) -> Int32
+
     public static func openFile(_ path: String, _ flags: Int32, _ mode: UInt32) -> Int32 {
         let fd = path.withCString { cOpen($0, flags) }
         if fd >= 0, flags & O_CREAT != 0 {
@@ -144,6 +150,28 @@ extension POSIXShim {
         return path.withCString { ptr in
             unlink(ptr)
         }
+    }
+
+    public static func linkFile(_ source: String, _ destination: String) -> Int32 {
+        source.withCString { src in
+            destination.withCString { dst in
+                cLink(src, dst)
+            }
+        }
+    }
+
+    public static func renameFile(_ source: String, _ destination: String) -> Int32 {
+        source.withCString { src in
+            destination.withCString { dst in
+                cRename(src, dst)
+            }
+        }
+    }
+
+    public static func fileSize(atPath path: String) -> Int64? {
+        var buffer = StatBuffer()
+        guard statPath(path, followSymlink: false, into: &buffer) == 0 else { return nil }
+        return buffer.size
     }
 }
 #endif

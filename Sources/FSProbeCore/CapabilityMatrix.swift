@@ -20,14 +20,25 @@ public struct CapabilityMatrix: Sendable {
     /// first; empty when no ascent was run.
     public let ancestors: [AncestorStep]
 
+    /// Boundary-mechanism experiments: path resolution, hard links, rename, and
+    /// the enumeration differential. Empty when not requested.
+    public let boundaryExperiments: [CrossBoundaryProbe.Experiment]
+
+    /// The app's own sandbox profile, read out of its container metadata.
+    public let sandboxProfile: SandboxProfileProbe.Result?
+
     public init(
         results: [ProbeResult],
         environment: EnvironmentRecord,
-        ancestors: [AncestorStep] = []
+        ancestors: [AncestorStep] = [],
+        boundaryExperiments: [CrossBoundaryProbe.Experiment] = [],
+        sandboxProfile: SandboxProfileProbe.Result? = nil
     ) {
         self.results = results
         self.environment = environment
         self.ancestors = ancestors
+        self.boundaryExperiments = boundaryExperiments
+        self.sandboxProfile = sandboxProfile
     }
 
     /// Platform context captured at run time.
