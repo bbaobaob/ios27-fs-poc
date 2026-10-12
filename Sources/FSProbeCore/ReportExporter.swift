@@ -127,12 +127,23 @@ public enum ReportExporter {
             for attempt in io.attempts {
                 let flag = attempt.enumeratedByInode ? "  <-- ENUMERATED BY INODE" : ""
                 lines.append("  \(attempt.path)")
+                // A nil errno means the open succeeded *only* when the attempt was
+                // actually made. Without identifiers there is nothing to report,
+                // and printing "ok" there would present a missing measurement as a
+                // successful one.
+                func inodeResult(_ errnoName: String?) -> String {
+                    guard attempt.identifiersAvailable else { return "not attempted" }
+                    return errnoName ?? "ok"
+                }
+                func pathResult(_ errnoName: String?) -> String {
+                    errnoName ?? "ok"
+                }
                 lines.append("      inode: dev=\(attempt.deviceID) ino=\(attempt.inode)")
-                lines.append("      by inode:  evtonly=\(attempt.evtonlyErrnoName ?? "ok") "
-                    + "readonly=\(attempt.readonlyErrnoName ?? "ok") "
-                    + "directory=\(attempt.directoryErrnoName ?? "ok")")
-                lines.append("      by path:   open=\(attempt.pathOpenErrnoName ?? "ok") "
-                    + "enumerate=\(attempt.pathEnumerationErrnoName ?? "ok")")
+                lines.append("      by inode:  evtonly=\(inodeResult(attempt.evtonlyErrnoName)) "
+                    + "readonly=\(inodeResult(attempt.readonlyErrnoName)) "
+                    + "directory=\(inodeResult(attempt.directoryErrnoName))")
+                lines.append("      by path:   open=\(pathResult(attempt.pathOpenErrnoName)) "
+                    + "enumerate=\(pathResult(attempt.pathEnumerationErrnoName))")
                 if let count = attempt.enumeratedEntries {
                     lines.append("      enumerated \(count) entries by inode\(flag)")
                     if let names = attempt.sampleEntryNames, !names.isEmpty {
