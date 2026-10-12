@@ -224,3 +224,103 @@ the research targets themselves:
 | 4 | `/var/mobile` | denied | not probed (walk reached maxDepth) |
 
 The simulator cannot answer any of these. The device run is required.
+
+---
+
+## iOS 27.0 on a physical device — first device evidence
+
+Captured 2026-10-12 by running the app on a physical iPhone. Platform recorded
+by the app itself, not assumed:
+
+| Field | Value |
+| --- | --- |
+| Device | iPhone12,5 |
+| OS | iOS 27.0 |
+| Build | 24A437 |
+| App container | `/var/mobile/Containers/Data/Application/DCBBC683-0F71-4227-82B4-AE8A6D6A7AF8` |
+| Process | `/var/containers/Bundle/Application/EA76E9EF-…/FSProbe.app/FSProbe` |
+| Captured | 2026-10-12T02:05:11Z |
+
+### Directory ascent from the app container
+
+```
+ 0 /var/mobile/Containers/Data/Application/DCBBC683-…        visible (7 entries)
+ 1 /var/mobile/Containers/Data/Application                   lstat=succeeded opendir=deniedEPERM readdir=deniedEPERM [EPERM]
+ 2 /var/mobile/Containers/Data                               lstat=succeeded opendir=deniedEPERM readdir=deniedEPERM [EPERM]
+ 3 /var/mobile/Containers                                    lstat=succeeded opendir=deniedEPERM readdir=deniedEPERM [EPERM]
+      stopped: boundary established after 3 consecutive not-fully-visible ancestors
+  boundary: first not-fully-visible ancestor is depth 1
+```
+
+**This is the central result, and it is a negative one:** an ordinary app on
+iOS 27.0 **cannot enumerate its sibling app containers**. The boundary sits
+immediately above the app's own container. No cross-app container enumeration,
+no App Group enumeration, no access to `/var/mobile`.
+
+### Full capability matrix on iOS 27.0
+
+Every `/var/` target behaves identically: `lstat` and `stat` succeed, every other
+operation is denied with `EPERM`.
+
+| Path | lstat | stat | opendir | readdir | open+read | create | write | unlink | readlink |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| app container | ok | ok | ok | ok | EISDIR | **EPERM** | **EPERM** | **EPERM** | EINVAL |
+| container/Documents | ok | ok | ok | ok | EISDIR | ok | ok | ok | EINVAL |
+| container/Library | ok | ok | ok | ok | EISDIR | ok | ok | ok | EINVAL |
+| container/tmp | ok | ok | ok | ok | EISDIR | ok | ok | ok | EINVAL |
+| `/var` | ok | ok | EPERM | EPERM | EPERM | EPERM | EPERM | EPERM | ok (`private/var`) |
+| `/private/var` | ok | ok | EPERM | EPERM | EPERM | EPERM | EPERM | EPERM | EINVAL |
+| `/var/mobile` | ok | ok | EPERM | EPERM | EPERM | EPERM | EPERM | EPERM | EINVAL |
+| `/var/mobile/Library` | ok | ok | EPERM | EPERM | EPERM | EPERM | EPERM | EPERM | EINVAL |
+| `/var/mobile/Library/Preferences` | ok | ok | EPERM | EPERM | EPERM | EPERM | EPERM | EPERM | EINVAL |
+| `/var/mobile/Containers` | ok | ok | EPERM | EPERM | EPERM | EPERM | EPERM | EPERM | EINVAL |
+| `/var/mobile/Containers/Data/Application` | ok | ok | EPERM | EPERM | EPERM | EPERM | EPERM | EPERM | EINVAL |
+| `/var/mobile/Containers/Shared/AppGroup` | ok | ok | EPERM | EPERM | EPERM | EPERM | EPERM | EPERM | EINVAL |
+| `/var/tmp` | ok | ok | EPERM | EPERM | EPERM | EPERM | EPERM | EPERM | EINVAL |
+
+### What this confirms
+
+- **H2 — iOS denies with `EPERM`, not `EACCES`.** Every refusal on the device is
+  `EPERM` (errno 1, "Operation not permitted"), which is the seatbelt signature.
+  The macOS host, by contrast, refused `/var` writes with `EACCES` (SIP). Keeping
+  the two errnos separate is what made this distinction visible at all.
+- **H4 — `/var` is a symlink to `/private/var`.** `readlink("/var")` returns
+  `private/var`; `lstat` reports a symlink (mode `120755`) while `stat` reports
+  the directory (`40755`). Path resolution through the symlink does not change
+  the authorization decision: `/var` and `/private/var` produce identical results
+  for every operation.
+- **The name-but-not-contents asymmetry.** `lstat`/`stat` succeed on
+  `/var/mobile` (mode `40711`, `drwx--x--x`), `/var/mobile/Library` (`40755`),
+  `/var/mobile/Containers` (`40755`), and `/var/tmp` (`41777`, the sticky
+  world-writable bit) — so the app can learn that these paths exist and read
+  their metadata, while `opendir` and `readdir` are refused. The sandbox permits
+  metadata lookup along a path it does not permit enumeration of. This is the
+  asymmetry the research plan asked about, and it is a documented property of the
+  seatbelt profile rather than a defect.
+- **No sandbox escape.** Every result on iOS 27.0 matches the expected behaviour
+  of an ordinary conventionally-signed app. Nothing observed exceeds the
+  documented permissions of the application.
+
+### One observation worth a follow-up
+
+The app's **own container root** refuses create/write/unlink with `EPERM`, while
+`Documents`, `Library`, and `tmp` inside it all permit them. The container root
+is enumerable (7 entries: `.com.apple.mobile_container_manager.metadata.plist`,
+`Documents`, `Library`, `SystemData`, `tmp`) but not writable. This is consistent
+with iOS confining app writes to the standard container subdirectories, but it
+was observed once on one build signed with a third-party distribution
+certificate. It should be re-checked on a build signed with a personal
+development certificate before being treated as platform behaviour.
+
+### Correction affecting earlier results
+
+The write probes' `readBackMatched` verdict was broken on every Darwin run before
+2026-10-12: `open()`'s variadic mode argument was never delivered, so created
+files had a garbage mode. On macOS that garbage denied read, so the read-back
+failed with `EACCES` and every write probe reported a mismatch — a measurement of
+the harness, not of the platform. Fixed by applying the mode with `fchmod()`
+after creation. **The write outcomes themselves (open and write returning success
+with the expected byte count) were always valid**; only the read-back verdict was
+wrong. The iOS 27.0 device run above predates the fix, so its
+`readBackMatched: false` values carry the same caveat and should be re-measured
+with a current build.
