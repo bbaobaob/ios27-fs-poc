@@ -277,10 +277,44 @@ public enum CrossBoundaryProbe {
         guard controlWorked else { return results }
 
         // The real test: link a file from outside the container into it.
-        // /var/mobile/Library is a directory, and linking a directory is refused by
-        // POSIX regardless of the sandbox, so use a path that is a regular file if
-        // one can be identified; otherwise record that the precondition failed.
-        let outsideFile = "/var/mobile/Library/.com.apple.MobileGestalt.plist"
+        //
+        // The source must be a *regular file* that provably exists. Linking a
+        // directory is refused by POSIX regardless of the sandbox, and guessing a
+        // filename that is absent yields ENOENT, which says nothing about the
+        // policy. The first device run hit exactly that: it reported ENOENT for a
+        // path that does not exist, making the experiment inconclusive.
+        //
+        // Candidates are ordered by how likely they are to exist and to be
+        // interesting. The first one that stats as a regular file is used.
+        let candidates = [
+            "/usr/lib/dyld",
+            "/private/etc/master.passwd",
+            "/etc/master.passwd",
+            "/var/mobile/Library/Preferences/.com.apple.mobile_container_manager.metadata.plist",
+            "/private/etc/hosts",
+            "/etc/hosts"
+        ]
+        guard let outsideFile = candidates.first(where: { isRegularFile($0) }) else {
+            results.append(Experiment(
+                id: "hardlink-cross-boundary",
+                mechanism: """
+                Hard links: `file-link*` is a distinct sandbox operation from `file-write*`. \
+                If it is not confined to the container, an app can bind a link to a \
+                protected file into its own writable tree and then read it.
+                """,
+                operation: "link()",
+                arguments: "no candidate source file could be stat'd outside the container",
+                expected: "Denied. The source lies outside every container allow rule.",
+                outcome: .notApplicable,
+                errnoName: nil,
+                errnoNumber: 0,
+                interpretation: """
+                No regular file outside the container could be confirmed to exist, so the \
+                experiment could not be run. This is a limitation of the probe, not a result.
+                """
+            ))
+            return results
+        }
         let rc = POSIXShim.linkFile(outsideFile, linkTarget)
         let succeeded = rc == 0
 
@@ -377,33 +411,93 @@ public enum CrossBoundaryProbe {
         guard fd2 >= 0 else { return results }
         POSIXShim.closeFile(fd2)
 
-        let rc = POSIXShim.renameFile(source, destination)
-        let succeeded = rc == 0
-        results.append(Experiment(
-            id: "rename-cross-boundary",
-            mechanism: """
-            Rename across the boundary: a successful rename out of the container would place a \
-            file this app controls into a location it cannot write, which is a write primitive \
-            beyond the sandbox.
-            """,
-            operation: "rename()",
-            arguments: "\(source) -> \(destination)",
-            expected: "Denied. Rename authorizes both the source and the destination vnode.",
-            outcome: succeeded ? .permitted : .denied,
-            errnoName: succeeded ? nil : currentErrnoName(),
-            errnoNumber: succeeded ? 0 : Int(currentErrno()),
-            interpretation: succeeded
-                ? "A file was renamed out of the container. This is a write primitive beyond the sandbox."
-                : "Rename out of the container was refused with \(currentErrnoName() ?? "an unknown errno")."
-        ))
+        // Two destinations, because the refusal reason matters.
+        //
+        // EXDEV is a filesystem-level refusal: the source and destination are on
+        // different volumes, and it says nothing about the sandbox. The first
+        // device run returned EXDEV, which made the experiment inconclusive. A
+        // destination inside the same directory tree -- the container's parent --
+        // is on the same volume, so a refusal there is attributable to policy.
+        // (destination, human-readable description, experiment id)
+        let destinations: [(String, String, String)] = [
+            ("/var/tmp/fsprobe-rename-escape", "a different volume",
+             "rename-cross-boundary-other-volume"),
+            (containerPath + "/../fsprobe-rename-escape", "the container parent directory",
+             "rename-cross-boundary-same-volume")
+        ]
 
-        // Clean up whichever copy exists.
-        if succeeded {
-            POSIXShim.unlinkFile(destination)
-        } else {
+        for (destination, description, experimentID) in destinations {
             POSIXShim.unlinkFile(source)
+            POSIXShim.unlinkFile(destination)
+            let freshFD = POSIXShim.openFile(source, O_CREAT | O_EXCL | O_WRONLY, 0o644)
+            if freshFD < 0 { continue }
+            POSIXShim.closeFile(freshFD)
+
+            let rc = POSIXShim.renameFile(source, destination)
+            let succeeded = rc == 0
+            let errnoName = succeeded ? nil : currentErrnoName()
+
+            results.append(Experiment(
+                id: experimentID,
+                mechanism: """
+                Rename across the boundary: a successful rename out of the container would \
+                place a file this app controls into a location it cannot write, which is a \
+                write primitive beyond the sandbox.
+                """,
+                operation: "rename()",
+                arguments: source + " -> " + destination,
+                expected: "Denied. Rename authorizes both the source and the destination vnode.",
+                outcome: succeeded ? .permitted : .denied,
+                errnoName: errnoName,
+                errnoNumber: succeeded ? 0 : Int(currentErrno()),
+                interpretation: succeeded
+                    ? "A file was renamed out of the container. This is a write primitive beyond the sandbox."
+                    : renameInterpretation(errnoName, destinationDescription: description)
+            ))
+
+            if succeeded {
+                POSIXShim.unlinkFile(destination)
+            } else {
+                POSIXShim.unlinkFile(source)
+            }
         }
         return results
+    }
+
+    /// Interpret a rename refusal, separating a policy denial from a
+    /// filesystem-level refusal that would mask it.
+    private static func renameInterpretation(
+        _ errnoName: String?,
+        destinationDescription: String
+    ) -> String {
+        switch errnoName {
+        case "EXDEV":
+            return """
+            Refused with EXDEV: the source and destination are on different volumes, so this \
+            is a filesystem-level refusal and does not show whether the sandbox would also \
+            have refused. The same-volume variant is the interpretable test.
+            """
+        case "EPERM":
+            return """
+            Refused with EPERM, the sandbox signature. The rename across the boundary was \
+            denied by policy.
+            """
+        case "EACCES":
+            return "Refused with EACCES: POSIX permissions on the destination directory."
+        default:
+            return "Refused with " + (errnoName ?? "an unknown errno")
+                + " (" + destinationDescription + ")."
+        }
+    }
+
+    /// True when `path` is an existing regular file.
+    private static func isRegularFile(_ path: String) -> Bool {
+        var buffer = StatBuffer()
+        guard POSIXShim.statPath(path, followSymlink: false, into: &buffer) == 0 else {
+            return false
+        }
+        // S_IFREG is 0o100000.
+        return (buffer.mode & 0o170000) == 0o100000
     }
 
     // MARK: - Enumeration differential

@@ -27,18 +27,23 @@ public struct CapabilityMatrix: Sendable {
     /// The app's own sandbox profile, read out of its container metadata.
     public let sandboxProfile: SandboxProfileProbe.Result?
 
+    /// The write boundary mapped across the app's own container.
+    public let containerWrite: ContainerWriteProbe.Result?
+
     public init(
         results: [ProbeResult],
         environment: EnvironmentRecord,
         ancestors: [AncestorStep] = [],
         boundaryExperiments: [CrossBoundaryProbe.Experiment] = [],
-        sandboxProfile: SandboxProfileProbe.Result? = nil
+        sandboxProfile: SandboxProfileProbe.Result? = nil,
+        containerWrite: ContainerWriteProbe.Result? = nil
     ) {
         self.results = results
         self.environment = environment
         self.ancestors = ancestors
         self.boundaryExperiments = boundaryExperiments
         self.sandboxProfile = sandboxProfile
+        self.containerWrite = containerWrite
     }
 
     /// Platform context captured at run time.

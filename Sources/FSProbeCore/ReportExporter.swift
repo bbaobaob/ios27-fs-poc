@@ -97,6 +97,26 @@ public enum ReportExporter {
             lines.append("  note:            \(profile.note)")
         }
 
+        if let cw = matrix.containerWrite {
+            lines.append("")
+            lines.append("Container write boundary (synthetic file, verified, removed):")
+            lines.append("  container: \(cw.containerPath)")
+            for entry in cw.entries {
+                let verdict = entry.writable
+                    ? "WRITABLE"
+                    : (entry.readableButNotWritable ? "read-only" : "not probed")
+                let mode = entry.modeOctal.map { " mode=\($0)" } ?? ""
+                let count = entry.entryCount.map { " entries=\($0)" } ?? ""
+                let errno = entry.createErrnoName.map { " [\($0)]" } ?? ""
+                lines.append("  \(entry.depth) \(entry.path) — \(verdict)\(mode)\(count)\(errno)")
+            }
+            lines.append("  writable:                \(cw.writablePaths.joined(separator: ", "))")
+            lines.append("  readable but not writable: \(cw.readableButNotWritablePaths.joined(separator: ", "))")
+            if !cw.inconclusivePaths.isEmpty {
+                lines.append("  inconclusive:            \(cw.inconclusivePaths.joined(separator: ", "))")
+            }
+        }
+
         if !matrix.boundaryExperiments.isEmpty {
             lines.append("")
             lines.append("Boundary-mechanism experiments:")
@@ -134,14 +154,16 @@ public enum ReportExporter {
         let ancestors: [AncestorStep]
         let boundaryExperiments: [CrossBoundaryProbe.Experiment]
         let sandboxProfile: SandboxProfileProbe.Result?
+        let containerWrite: ContainerWriteProbe.Result?
 
         init(matrix: CapabilityMatrix) {
-            self.schema = "fsprobe.capability-matrix.v3"
+            self.schema = "fsprobe.capability-matrix.v4"
             self.environment = matrix.environment
             self.results = matrix.results
             self.ancestors = matrix.ancestors
             self.boundaryExperiments = matrix.boundaryExperiments
             self.sandboxProfile = matrix.sandboxProfile
+            self.containerWrite = matrix.containerWrite
         }
     }
 }

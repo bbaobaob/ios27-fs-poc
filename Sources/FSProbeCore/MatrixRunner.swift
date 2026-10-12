@@ -50,6 +50,7 @@ public struct MatrixRunner: Sendable {
 
         var boundary: [CrossBoundaryProbe.Experiment] = []
         var profile: SandboxProfileProbe.Result?
+        var containerWrite: ContainerWriteProbe.Result?
         if runBoundaryExperiments {
             // The container is the app's own home; every experiment is scoped to
             // it and to paths it cannot reach.
@@ -61,6 +62,7 @@ public struct MatrixRunner: Sendable {
                 containerPath: container,
                 documentsDirectory: documents
             )
+            containerWrite = ContainerWriteProbe.probe(containerPath: container)
         }
 
         return CapabilityMatrix(
@@ -68,7 +70,8 @@ public struct MatrixRunner: Sendable {
             environment: env,
             ancestors: ancestors,
             boundaryExperiments: boundary,
-            sandboxProfile: profile
+            sandboxProfile: profile,
+            containerWrite: containerWrite
         )
     }
 }

@@ -48,7 +48,8 @@ final class CrossBoundaryProbeTests: XCTestCase {
         let ids = Set(battery().map { $0.id })
         let required = [
             "dotdot-traversal", "hardlink-control", "rename-control",
-            "rename-cross-boundary", "enumerate-posix", "enumerate-foundation"
+            "rename-cross-boundary-other-volume", "rename-cross-boundary-same-volume",
+            "enumerate-posix", "enumerate-foundation"
         ]
         for id in required {
             XCTAssertTrue(ids.contains(id), "missing experiment: \(id) (got \(ids.sorted()))")
@@ -82,8 +83,10 @@ final class CrossBoundaryProbeTests: XCTestCase {
                             "the control succeeded, so the dependent test must run")
         }
 
-        // Rename has no such host limitation, so both must always be present.
-        XCTAssertNotNil(experiments["rename-cross-boundary"])
+        // Rename has no such host limitation, so both destination variants must
+        // always be present.
+        XCTAssertNotNil(experiments["rename-cross-boundary-other-volume"])
+        XCTAssertNotNil(experiments["rename-cross-boundary-same-volume"])
     }
 
     func testPermittedResultsAreFlaggedAsBoundaryViolations() throws {
