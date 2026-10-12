@@ -79,6 +79,8 @@ extension POSIXShim {
         if rc == 0 {
             buffer.size = Int64(st.st_size)
             buffer.mode = UInt32(st.st_mode)
+            buffer.deviceID = Int32(st.st_dev)
+            buffer.inode = UInt64(st.st_ino)
         }
         return rc
     }
@@ -123,6 +125,34 @@ extension POSIXShim {
         var buffer = StatBuffer()
         guard statPath(path, followSymlink: false, into: &buffer) == 0 else { return nil }
         return buffer.size
+    }
+
+    // MARK: - Symbol lookup and descriptor-based directories
+
+    /// `dlsym(RTLD_DEFAULT, name)`, resolved at runtime.
+    ///
+    /// Used for `openbyid_np` so the build does not depend on the symbol being
+    /// present in the platform's libSystem.
+    public static func lookupSymbol(_ name: String) -> UnsafeMutableRawPointer? {
+        // RTLD_DEFAULT is ((void *) -2) on Darwin.
+        name.withCString { ptr in
+            dlsym(UnsafeMutableRawPointer(bitPattern: -2), ptr)
+        }
+    }
+
+    /// `fdopendir(fd)`: turn an already-open directory descriptor into a
+    /// directory stream.
+    public static func openDirFromFD(_ fd: Int32) -> OpaquePointer? {
+        guard let dir = fdopendir(fd) else { return nil }
+        return OpaquePointer(dir)
+    }
+
+    /// The name of the next directory entry, or nil at end of stream.
+    public static func nextEntryName(_ dir: OpaquePointer) -> String? {
+        guard let entry = readdir(UnsafeMutablePointer<DIR>(dir)) else { return nil }
+        return withUnsafePointer(to: entry.pointee.d_name) { ptr in
+            String(cString: UnsafeRawPointer(ptr).assumingMemoryBound(to: CChar.self))
+        }
     }
 }
 #endif

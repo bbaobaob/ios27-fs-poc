@@ -36,6 +36,10 @@ public struct StatBuffer: Sendable {
     public var size: Int64 = 0
     /// Full st_mode value (file type + permission bits).
     public var mode: UInt32 = 0
+    /// st_dev — the filesystem id, the first half of an openbyid_np identity.
+    public var deviceID: Int32 = 0
+    /// st_ino — the object id, the second half of an openbyid_np identity.
+    public var inode: UInt64 = 0
     public init() {}
 }
 

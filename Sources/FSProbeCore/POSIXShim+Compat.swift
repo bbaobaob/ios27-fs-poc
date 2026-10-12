@@ -135,6 +135,8 @@ extension POSIXShim {
         if rc == 0 {
             buffer.size = st.st_size
             buffer.mode = st.st_mode
+            buffer.deviceID = Int32(truncatingIfNeeded: st.st_dev)
+            buffer.inode = st.st_ino
         }
         return rc
     }
@@ -172,6 +174,33 @@ extension POSIXShim {
         var buffer = StatBuffer()
         guard statPath(path, followSymlink: false, into: &buffer) == 0 else { return nil }
         return buffer.size
+    }
+
+    // MARK: - Symbol lookup and descriptor-based directories
+
+    @_silgen_name("fdopendir")
+    private static func cFdopendir(_ fd: Int32) -> OpaquePointer?
+
+    /// `dlsym(RTLD_DEFAULT, name)`, resolved at runtime.
+    public static func lookupSymbol(_ name: String) -> UnsafeMutableRawPointer? {
+        // RTLD_DEFAULT is ((void *) -2) on Darwin but 0 elsewhere, and passing the
+        // wrong handle crashes rather than returning null. The open-by-inode
+        // experiment targets iOS, so this host reports the symbol as unavailable
+        // rather than risking a bad call.
+        _ = name
+        return nil
+    }
+
+    /// `fdopendir(fd)`.
+    public static func openDirFromFD(_ fd: Int32) -> OpaquePointer? {
+        cFdopendir(fd)
+    }
+
+    /// Entry names are not read on non-Darwin hosts: the `dirent` layout differs
+    /// and this experiment targets iOS. The entry *count* is still available,
+    /// which is what the open-by-inode test needs.
+    public static func nextEntryName(_ dir: OpaquePointer) -> String? {
+        nil
     }
 }
 #endif

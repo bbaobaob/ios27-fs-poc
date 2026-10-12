@@ -51,6 +51,7 @@ public struct MatrixRunner: Sendable {
         var boundary: [CrossBoundaryProbe.Experiment] = []
         var profile: SandboxProfileProbe.Result?
         var containerWrite: ContainerWriteProbe.Result?
+        var inodeOpen: InodeOpenProbe.Result?
         if runBoundaryExperiments {
             // The container is the app's own home; every experiment is scoped to
             // it and to paths it cannot reach.
@@ -63,6 +64,7 @@ public struct MatrixRunner: Sendable {
                 documentsDirectory: documents
             )
             containerWrite = ContainerWriteProbe.probe(containerPath: container)
+            inodeOpen = InodeOpenProbe.probe(paths: InodeOpenProbe.defaultTargets())
         }
 
         return CapabilityMatrix(
@@ -71,7 +73,8 @@ public struct MatrixRunner: Sendable {
             ancestors: ancestors,
             boundaryExperiments: boundary,
             sandboxProfile: profile,
-            containerWrite: containerWrite
+            containerWrite: containerWrite,
+            inodeOpen: inodeOpen
         )
     }
 }

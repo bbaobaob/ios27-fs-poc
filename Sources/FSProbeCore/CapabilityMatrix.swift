@@ -30,13 +30,18 @@ public struct CapabilityMatrix: Sendable {
     /// The write boundary mapped across the app's own container.
     public let containerWrite: ContainerWriteProbe.Result?
 
+    /// Open-by-inode results: whether a vnode can be opened without a path
+    /// traversal, which is the one code path that skips the lookup hook.
+    public let inodeOpen: InodeOpenProbe.Result?
+
     public init(
         results: [ProbeResult],
         environment: EnvironmentRecord,
         ancestors: [AncestorStep] = [],
         boundaryExperiments: [CrossBoundaryProbe.Experiment] = [],
         sandboxProfile: SandboxProfileProbe.Result? = nil,
-        containerWrite: ContainerWriteProbe.Result? = nil
+        containerWrite: ContainerWriteProbe.Result? = nil,
+        inodeOpen: InodeOpenProbe.Result? = nil
     ) {
         self.results = results
         self.environment = environment
@@ -44,6 +49,7 @@ public struct CapabilityMatrix: Sendable {
         self.boundaryExperiments = boundaryExperiments
         self.sandboxProfile = sandboxProfile
         self.containerWrite = containerWrite
+        self.inodeOpen = inodeOpen
     }
 
     /// Platform context captured at run time.

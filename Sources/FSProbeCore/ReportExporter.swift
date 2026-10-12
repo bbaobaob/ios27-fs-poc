@@ -117,6 +117,39 @@ public enum ReportExporter {
             }
         }
 
+        if let io = matrix.inodeOpen {
+            lines.append("")
+            lines.append("Open-by-inode (openbyid_np: no path traversal at all):")
+            lines.append("  symbol available: \(io.symbolAvailable)")
+            if !io.symbolAvailable {
+                lines.append("  openbyid_np is not present on this platform, so the experiment could not run.")
+            }
+            for attempt in io.attempts {
+                let flag = attempt.enumeratedByInode ? "  <-- ENUMERATED BY INODE" : ""
+                lines.append("  \(attempt.path)")
+                lines.append("      inode: dev=\(attempt.deviceID) ino=\(attempt.inode)")
+                lines.append("      by inode:  evtonly=\(attempt.evtonlyErrnoName ?? "ok") "
+                    + "readonly=\(attempt.readonlyErrnoName ?? "ok") "
+                    + "directory=\(attempt.directoryErrnoName ?? "ok")")
+                lines.append("      by path:   open=\(attempt.pathOpenErrnoName ?? "ok") "
+                    + "enumerate=\(attempt.pathEnumerationErrnoName ?? "ok")")
+                if let count = attempt.enumeratedEntries {
+                    lines.append("      enumerated \(count) entries by inode\(flag)")
+                    if let names = attempt.sampleEntryNames, !names.isEmpty {
+                        lines.append("      sample: \(names.joined(separator: ", "))")
+                    }
+                }
+                if attempt.inodeOpenSucceededWherePathFailed {
+                    lines.append("      VERDICT: inode open succeeded where the path open was refused.")
+                }
+            }
+            if !io.violations.isEmpty {
+                lines.append("  VIOLATIONS: \(io.violations.map { $0.path }.joined(separator: ", "))")
+            } else {
+                lines.append("  no inode-based open succeeded where the path-based one was refused")
+            }
+        }
+
         if !matrix.boundaryExperiments.isEmpty {
             lines.append("")
             lines.append("Boundary-mechanism experiments:")
@@ -155,15 +188,17 @@ public enum ReportExporter {
         let boundaryExperiments: [CrossBoundaryProbe.Experiment]
         let sandboxProfile: SandboxProfileProbe.Result?
         let containerWrite: ContainerWriteProbe.Result?
+        let inodeOpen: InodeOpenProbe.Result?
 
         init(matrix: CapabilityMatrix) {
-            self.schema = "fsprobe.capability-matrix.v4"
+            self.schema = "fsprobe.capability-matrix.v5"
             self.environment = matrix.environment
             self.results = matrix.results
             self.ancestors = matrix.ancestors
             self.boundaryExperiments = matrix.boundaryExperiments
             self.sandboxProfile = matrix.sandboxProfile
             self.containerWrite = matrix.containerWrite
+            self.inodeOpen = matrix.inodeOpen
         }
     }
 }
