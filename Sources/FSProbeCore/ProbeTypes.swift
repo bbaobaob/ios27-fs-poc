@@ -60,6 +60,14 @@ public struct ProbeEvidence: Codable, Sendable, Equatable {
     public var bytesWritten: Int?
     /// Whether read-back of written content matched what was written.
     public var readBackMatched: Bool?
+    /// How many bytes the read-back actually returned.
+    ///
+    /// Recorded because a mismatch is only interpretable with this: zero bytes
+    /// means the read failed, fewer bytes means a short read, and the right
+    /// count means the content differs.
+    public var bytesReadBack: Int?
+    /// Index of the first differing byte when read-back did not match.
+    public var readBackMismatchAt: Int?
     /// The resolved symlink target, when readLink succeeded.
     public var linkTarget: String?
     /// File size reported by stat.
@@ -79,6 +87,8 @@ public struct ProbeEvidence: Codable, Sendable, Equatable {
         bytesRead: Int? = nil,
         bytesWritten: Int? = nil,
         readBackMatched: Bool? = nil,
+        bytesReadBack: Int? = nil,
+        readBackMismatchAt: Int? = nil,
         linkTarget: String? = nil,
         statSize: Int64? = nil,
         statModeOctal: String? = nil,
@@ -89,6 +99,8 @@ public struct ProbeEvidence: Codable, Sendable, Equatable {
         self.bytesRead = bytesRead
         self.bytesWritten = bytesWritten
         self.readBackMatched = readBackMatched
+        self.bytesReadBack = bytesReadBack
+        self.readBackMismatchAt = readBackMismatchAt
         self.linkTarget = linkTarget
         self.statSize = statSize
         self.statModeOctal = statModeOctal

@@ -195,15 +195,12 @@ public enum POSIXProbeEngine {
         guard fd >= 0 else {
             return failure(path: target, operation: .createFile, targetPath: path)
         }
-        let writeResult = writeAll(fd: fd, payload: payload)
-        POSIXShim.closeFile(fd)
-        if writeResult < 0 {
+        let verification = verifyWrite(fd: fd, target: target, payload: payload)
+        if verification.written < 0 {
             POSIXShim.unlinkFile(target)
             return failure(path: target, operation: .createFile, targetPath: path)
         }
 
-        // Verify by reading back, then clean up.
-        let verified = readBack(target) == payload
         POSIXShim.unlinkFile(target)
 
         return ProbeResult(
@@ -213,7 +210,12 @@ public enum POSIXProbeEngine {
             errnoNumber: 0,
             errnoName: nil,
             errnoDescription: nil,
-            evidence: ProbeEvidence(bytesWritten: writeResult, readBackMatched: verified),
+            evidence: ProbeEvidence(
+                bytesWritten: verification.written,
+                readBackMatched: verification.matched,
+                bytesReadBack: verification.bytesReadBack,
+                readBackMismatchAt: verification.mismatchAt
+            ),
             cause: .documentedCapability,
             note: "Synthetic file created, verified by read-back, then removed.",
             targetPath: path
@@ -229,14 +231,12 @@ public enum POSIXProbeEngine {
         guard fd >= 0 else {
             return failure(path: target, operation: .writeFile, targetPath: path)
         }
-        let writeResult = writeAll(fd: fd, payload: payload)
-        POSIXShim.closeFile(fd)
-        if writeResult < 0 {
+        let verification = verifyWrite(fd: fd, target: target, payload: payload)
+        if verification.written < 0 {
             POSIXShim.unlinkFile(target)
             return failure(path: target, operation: .writeFile, targetPath: path)
         }
 
-        let verified = readBack(target) == payload
         POSIXShim.unlinkFile(target)
 
         return ProbeResult(
@@ -246,7 +246,12 @@ public enum POSIXProbeEngine {
             errnoNumber: 0,
             errnoName: nil,
             errnoDescription: nil,
-            evidence: ProbeEvidence(bytesWritten: writeResult, readBackMatched: verified),
+            evidence: ProbeEvidence(
+                bytesWritten: verification.written,
+                readBackMatched: verification.matched,
+                bytesReadBack: verification.bytesReadBack,
+                readBackMismatchAt: verification.mismatchAt
+            ),
             cause: .documentedCapability,
             note: "Synthetic file written, verified by read-back, then removed.",
             targetPath: path
@@ -304,6 +309,35 @@ public enum POSIXProbeEngine {
             evidence: ProbeEvidence(linkTarget: target),
             cause: .documentedCapability
         )
+    }
+
+    /// Write, read back, and report exactly what happened.
+    ///
+    /// Returns the evidence fields for a write probe: bytes written, whether the
+    /// read-back matched, how many bytes came back, and where the first
+    /// difference is. A bare "did not match" is not interpretable.
+    private static func verifyWrite(fd: Int32, target: String, payload: Data)
+        -> (written: Int, matched: Bool, bytesReadBack: Int, mismatchAt: Int?)
+    {
+        let written = writeAll(fd: fd, payload: payload)
+        POSIXShim.closeFile(fd)
+        guard written >= 0 else { return (written, false, 0, nil) }
+
+        let readBackData = readBack(target)
+        let matched = readBackData == payload
+        var mismatchAt: Int?
+        if !matched {
+            let limit = min(readBackData.count, payload.count)
+            for index in 0..<limit where readBackData[readBackData.startIndex + index]
+                                        != payload[payload.startIndex + index] {
+                mismatchAt = index
+                break
+            }
+            if mismatchAt == nil, readBackData.count != payload.count {
+                mismatchAt = limit
+            }
+        }
+        return (written, matched, readBackData.count, mismatchAt)
     }
 
     // MARK: - Helpers
