@@ -217,7 +217,7 @@ public enum POSIXProbeEngine {
                 readBackMismatchAt: verification.mismatchAt
             ),
             cause: .documentedCapability,
-            note: "Synthetic file created, verified by read-back, then removed.",
+            note: writeNote(verification, created: true),
             targetPath: path
         )
     }
@@ -253,7 +253,7 @@ public enum POSIXProbeEngine {
                 readBackMismatchAt: verification.mismatchAt
             ),
             cause: .documentedCapability,
-            note: "Synthetic file written, verified by read-back, then removed.",
+            note: writeNote(verification, created: false),
             targetPath: path
         )
     }
@@ -317,13 +317,15 @@ public enum POSIXProbeEngine {
     /// read-back matched, how many bytes came back, and where the first
     /// difference is. A bare "did not match" is not interpretable.
     private static func verifyWrite(fd: Int32, target: String, payload: Data)
-        -> (written: Int, matched: Bool, bytesReadBack: Int, mismatchAt: Int?)
+        -> (written: Int, matched: Bool, bytesReadBack: Int, mismatchAt: Int?,
+            openErrno: Int32?, readErrno: Int32?)
     {
         let written = writeAll(fd: fd, payload: payload)
         POSIXShim.closeFile(fd)
-        guard written >= 0 else { return (written, false, 0, nil) }
+        guard written >= 0 else { return (written, false, 0, nil, nil, nil) }
 
-        let readBackData = readBack(target)
+        let readBackOutcome = readBackDetailed(target)
+        let readBackData = readBackOutcome.data
         let matched = readBackData == payload
         var mismatchAt: Int?
         if !matched {
@@ -337,7 +339,35 @@ public enum POSIXProbeEngine {
                 mismatchAt = limit
             }
         }
-        return (written, matched, readBackData.count, mismatchAt)
+        return (written, matched, readBackData.count, mismatchAt,
+                readBackOutcome.openErrno, readBackOutcome.readErrno)
+    }
+
+    /// Human-readable account of a write probe, including why a read-back
+    /// mismatch happened when it does.
+    private static func writeNote(
+        _ v: (written: Int, matched: Bool, bytesReadBack: Int, mismatchAt: Int?,
+              openErrno: Int32?, readErrno: Int32?),
+        created: Bool
+    ) -> String {
+        var parts: [String] = [
+            created
+                ? "Synthetic file created, verified by read-back, then removed."
+                : "Synthetic file written, verified by read-back, then removed."
+        ]
+        if v.matched { return parts[0] }
+        if let openErrno = v.openErrno {
+            parts.append("read-back open failed: \(ErrorClassifier.errnoName(openErrno)) "
+                         + "(\(ErrorClassifier.description(for: openErrno)))")
+        } else if let readErrno = v.readErrno {
+            parts.append("read-back read failed: \(ErrorClassifier.errnoName(readErrno)) "
+                         + "(\(ErrorClassifier.description(for: readErrno)))")
+        } else if v.bytesReadBack == 0 {
+            parts.append("read-back returned 0 bytes with no error")
+        } else if let at = v.mismatchAt {
+            parts.append("read-back returned \(v.bytesReadBack) bytes; first difference at index \(at)")
+        }
+        return parts.joined(separator: " ")
     }
 
     // MARK: - Helpers
@@ -354,17 +384,39 @@ public enum POSIXProbeEngine {
         return written
     }
 
-    private static func readBack(_ path: String) -> Data {
+    /// Outcome of a read-back attempt, so a failure can be attributed.
+    private struct ReadBack: Sendable {
+        var data: Data = Data()
+        /// Nil when the open succeeded, otherwise the errno from open().
+        var openErrno: Int32?
+        /// Nil when the read succeeded, otherwise the errno from read().
+        var readErrno: Int32?
+    }
+
+    private static func readBackDetailed(_ path: String) -> ReadBack {
+        var outcome = ReadBack()
         let fd = POSIXShim.openFile(path, O_RDONLY, 0)
-        guard fd >= 0 else { return Data() }
+        guard fd >= 0 else {
+            outcome.openErrno = currentErrno()
+            return outcome
+        }
         defer { POSIXShim.closeFile(fd) }
         var buffer = [UInt8](repeating: 0, count: maxReadBytes)
         let n: Int = buffer.withUnsafeMutableBufferPointer { ptr -> Int in
             guard let base = ptr.baseAddress else { return -1 }
             return POSIXShim.readFD(fd, base, ptr.count)
         }
-        guard n > 0 else { return Data() }
-        return Data(buffer.prefix(n))
+        if n < 0 {
+            outcome.readErrno = currentErrno()
+            return outcome
+        }
+        guard n > 0 else { return outcome }
+        outcome.data = Data(buffer.prefix(n))
+        return outcome
+    }
+
+    private static func readBack(_ path: String) -> Data {
+        readBackDetailed(path).data
     }
 
     /// Build a failure result from the *current* errno, or an explicit code.

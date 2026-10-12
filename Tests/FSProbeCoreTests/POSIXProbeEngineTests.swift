@@ -129,3 +129,48 @@ final class POSIXProbeEngineTests: XCTestCase {
         XCTAssertEqual(read.evidence.bytesRead, POSIXProbeEngine.maxReadBytes)
     }
 }
+
+// The macOS-host CI run reported readBackMatched=false on every successful write
+// while the direct probe tests above passed. These tests drive the same code
+// through MatrixRunner so the discrepancy is reproducible in CI rather than only
+// through the CLI.
+final class MatrixRunnerWriteTests: XCTestCase {
+
+    var root: String!
+
+    override func setUpWithError() throws {
+        root = NSTemporaryDirectory() + "fsprobe-runner-\(UUID().uuidString)"
+        try FileManager.default.createDirectory(atPath: root, withIntermediateDirectories: true)
+    }
+
+    override func tearDownWithError() throws {
+        if let root = root { try? FileManager.default.removeItem(atPath: root) }
+    }
+
+    func testMatrixRunnerWriteProbeReadsBack() throws {
+        let matrix = MatrixRunner().run(
+            targets: [FSTarget(path: root, label: "root", rationale: "test", isBaseline: true)]
+        )
+        let writes = matrix.results.filter {
+            $0.operation == .writeFile || $0.operation == .createFile
+        }
+        XCTAssertEqual(writes.count, 2)
+        for result in writes {
+            let operation = result.operation.rawValue
+            XCTAssertEqual(result.outcome, .succeeded, "\(operation) should succeed in \(root)")
+            XCTAssertEqual(result.evidence.bytesWritten, 29, "\(operation) should write the payload")
+            XCTAssertEqual(result.evidence.bytesReadBack, 29,
+                           "\(operation) read-back returned \(result.evidence.bytesReadBack ?? -1) bytes")
+            XCTAssertEqual(result.evidence.readBackMatched, true,
+                           "\(operation) read-back mismatch: \(result.note ?? "no note")")
+        }
+    }
+
+    func testMatrixRunnerLeavesNoSyntheticFileBehind() throws {
+        _ = MatrixRunner().run(
+            targets: [FSTarget(path: root, label: "root", rationale: "test", isBaseline: true)]
+        )
+        let leftover = root + "/" + POSIXProbeEngine.syntheticFileName
+        XCTAssertFalse(FileManager.default.fileExists(atPath: leftover))
+    }
+}
