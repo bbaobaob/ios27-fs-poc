@@ -176,6 +176,38 @@ extension POSIXShim {
         return buffer.size
     }
 
+    /// `clonefile(source, destination)` -- APFS clone, a copy by inode that
+    /// performs no read or write of file contents.
+    ///
+    /// Resolved at runtime rather than linked: `clonefile` does not exist on
+    /// every platform (it is absent from the Android verification host, which
+    /// broke the link). Resolving it keeps the build portable and lets the probe
+    /// report the symbol as unavailable instead of failing to build.
+    private typealias ClonefileFn = @convention(c) (
+        UnsafePointer<CChar>, UnsafePointer<CChar>, UInt32
+    ) -> Int32
+
+    private static var clonefileFunction: ClonefileFn? = {
+        guard let sym = lookupSymbol("clonefile") else { return nil }
+        return unsafeBitCast(sym, to: ClonefileFn.self)
+    }()
+
+    /// True when the platform provides `clonefile`.
+    public static var hasClonefile: Bool { clonefileFunction != nil }
+
+    public static func cloneFile(_ source: String, _ destination: String) -> Int32 {
+        guard let fn = clonefileFunction else {
+            // ENOSYS: the operation is not implemented here.
+            setErrno(ENOSYS)
+            return -1
+        }
+        return source.withCString { src in
+            destination.withCString { dst in
+                fn(src, dst, 0)
+            }
+        }
+    }
+
     // MARK: - Symbol lookup and descriptor-based directories
 
     @_silgen_name("fdopendir")

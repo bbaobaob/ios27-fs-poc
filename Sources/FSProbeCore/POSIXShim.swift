@@ -22,6 +22,7 @@
 //    linkFile(_:_:)              -> link(source, destination)
 //    renameFile(_:_:)            -> rename(source, destination)
 //    fileSize(atPath:)           -> st_size via stat()
+//    cloneFile(_:_:)            -> clonefile(source, destination)
 //
 
 import Foundation

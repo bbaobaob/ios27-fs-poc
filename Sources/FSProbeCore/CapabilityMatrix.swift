@@ -34,6 +34,9 @@ public struct CapabilityMatrix: Sendable {
     /// traversal, which is the one code path that skips the lookup hook.
     public let inodeOpen: InodeOpenProbe.Result?
 
+    /// Results of the APFS-clone boundary experiments.
+    public let clone: CloneProbe.Result?
+
     /// Results of testing whether a user-granted scope is confined to what the
     /// user picked. Nil until the user grants access.
     public let securityScope: SecurityScopeProbe.Result?
@@ -49,7 +52,8 @@ public struct CapabilityMatrix: Sendable {
         containerWrite: ContainerWriteProbe.Result? = nil,
         inodeOpen: InodeOpenProbe.Result? = nil,
         securityScope: SecurityScopeProbe.Result? = nil,
-        securityScopeAfterRelease: SecurityScopeProbe.Result? = nil
+        securityScopeAfterRelease: SecurityScopeProbe.Result? = nil,
+        clone: CloneProbe.Result? = nil
     ) {
         self.results = results
         self.environment = environment
@@ -60,6 +64,7 @@ public struct CapabilityMatrix: Sendable {
         self.inodeOpen = inodeOpen
         self.securityScope = securityScope
         self.securityScopeAfterRelease = securityScopeAfterRelease
+        self.clone = clone
     }
 
     /// Platform context captured at run time.

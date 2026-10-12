@@ -117,6 +117,31 @@ public enum ReportExporter {
             }
         }
 
+        if let clone = matrix.clone {
+            lines.append("")
+            lines.append("APFS clone across the boundary (a copy by inode):")
+            if !clone.candidateSources.isEmpty {
+                lines.append("  sources tried: \(clone.candidateSources.joined(separator: ", "))")
+            }
+            for experiment in clone.experiments {
+                let flag = experiment.isBoundaryViolation ? "  <-- BOUNDARY VIOLATION" : ""
+                lines.append("  [\(experiment.outcome.rawValue)] \(experiment.id)\(flag)")
+                lines.append("      \(experiment.operation)  args: \(experiment.arguments)")
+                if let errno = experiment.errnoName {
+                    lines.append("      errno: \(errno) (\(experiment.errnoNumber))")
+                }
+                if let bytes = experiment.clonedBytes {
+                    lines.append("      cloned: \(bytes) bytes, sha256 \(experiment.clonedSHA256 ?? "unknown")")
+                }
+                lines.append("      result: \(experiment.interpretation)")
+            }
+            if !clone.violations.isEmpty {
+                lines.append("  VIOLATIONS: \(clone.violations.map { $0.id }.joined(separator: ", "))")
+            } else {
+                lines.append("  no clone succeeded across the boundary")
+            }
+        }
+
         if let io = matrix.inodeOpen {
             lines.append("")
             lines.append("Open-by-inode (openbyid_np: no path traversal at all):")
@@ -225,10 +250,11 @@ public enum ReportExporter {
         let containerWrite: ContainerWriteProbe.Result?
         let inodeOpen: InodeOpenProbe.Result?
         let securityScope: SecurityScopeProbe.Result?
+        let clone: CloneProbe.Result?
         let securityScopeAfterRelease: SecurityScopeProbe.Result?
 
         init(matrix: CapabilityMatrix) {
-            self.schema = "fsprobe.capability-matrix.v6"
+            self.schema = "fsprobe.capability-matrix.v7"
             self.environment = matrix.environment
             self.results = matrix.results
             self.ancestors = matrix.ancestors
@@ -238,6 +264,7 @@ public enum ReportExporter {
             self.inodeOpen = matrix.inodeOpen
             self.securityScope = matrix.securityScope
             self.securityScopeAfterRelease = matrix.securityScopeAfterRelease
+            self.clone = matrix.clone
         }
     }
 }

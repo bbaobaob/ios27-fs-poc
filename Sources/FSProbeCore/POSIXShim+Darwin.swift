@@ -120,6 +120,16 @@ extension POSIXShim {
         }
     }
 
+    /// `clonefile(source, destination)` -- APFS clone, a copy by inode that
+    /// performs no read or write of file contents.
+    public static func cloneFile(_ source: String, _ destination: String) -> Int32 {
+        return source.withCString { src in
+            destination.withCString { dst in
+                clonefile(src, dst, 0)
+            }
+        }
+    }
+
     /// `st_size` for a path, or nil when stat() fails.
     public static func fileSize(atPath path: String) -> Int64? {
         var buffer = StatBuffer()
