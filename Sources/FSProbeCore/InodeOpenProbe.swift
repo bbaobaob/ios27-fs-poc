@@ -180,6 +180,8 @@ public enum InodeOpenProbe {
         var buffer = StatBuffer()
         let statRC = POSIXShim.statPath(path, followSymlink: false, into: &buffer)
         guard statRC == 0 else {
+            // lstat failed, so there is no (fsid, inode) pair to open by. Record
+            // that plainly rather than attempting anything.
             return Attempt(
                 path: path, deviceID: 0, inode: 0, identifiersAvailable: false,
                 evtonlyErrnoName: nil, readonlyErrnoName: nil,
@@ -191,6 +193,26 @@ public enum InodeOpenProbe {
 
         let deviceID = buffer.deviceID
         let inode = buffer.inode
+
+        // Without real identifiers there is nothing to open by inode. Attempting
+        // it anyway passes (0, 0), which resolves to some arbitrary object and
+        // produces a meaningless "ok" -- that is a fabricated result, not a
+        // measurement. Skip the inode attempts entirely instead.
+        guard deviceID != 0 || inode != 0 else {
+            return Attempt(
+                path: path,
+                deviceID: deviceID,
+                inode: inode,
+                identifiersAvailable: false,
+                evtonlyErrnoName: nil,
+                readonlyErrnoName: nil,
+                directoryErrnoName: nil,
+                enumeratedEntries: nil,
+                sampleEntryNames: nil,
+                pathOpenErrnoName: nil,
+                pathEnumerationErrnoName: nil
+            )
+        }
 
         // Path-based comparison: what does a normal open return for this path?
         let pathFD = POSIXShim.openFile(path, kO_RDONLY, 0)
