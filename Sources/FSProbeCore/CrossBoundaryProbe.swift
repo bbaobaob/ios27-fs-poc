@@ -46,6 +46,10 @@ public enum CrossBoundaryProbe {
         public let arguments: String
         /// What the documented policy predicts.
         public let expected: String
+        /// True when a permitted result is the *expected* outcome, as for the
+        /// controls that operate entirely inside the container. Without this, a
+        /// successful control is misreported as a boundary violation.
+        public let expectedPermitted: Bool
         /// What was observed.
         public let outcome: Outcome
         public let errnoName: String?
@@ -62,20 +66,26 @@ public enum CrossBoundaryProbe {
             outcome: Outcome,
             errnoName: String?,
             errnoNumber: Int,
-            interpretation: String
+            interpretation: String,
+            expectedPermitted: Bool = false
         ) {
             self.id = id
             self.mechanism = mechanism
             self.operation = operation
             self.arguments = arguments
             self.expected = expected
+            self.expectedPermitted = expectedPermitted
             self.outcome = outcome
             self.errnoName = errnoName
             self.errnoNumber = errnoNumber
             self.interpretation = interpretation
         }
 
-        public var isBoundaryViolation: Bool { outcome == .permitted }
+        /// A boundary violation is a success the policy did not predict. A
+        /// control succeeding inside the container is not a violation.
+        public var isBoundaryViolation: Bool {
+            outcome == .permitted && !expectedPermitted
+        }
     }
 
     /// Run the whole battery.
@@ -260,7 +270,8 @@ public enum CrossBoundaryProbe {
             errnoNumber: controlWorked ? 0 : Int(currentErrno()),
             interpretation: controlWorked
                 ? "link() works inside the container, so the cross-boundary result below is meaningful."
-                : "link() failed even inside the container, so the cross-boundary test is not interpretable."
+                : "link() failed even inside the container, so the cross-boundary test is not interpretable.",
+            expectedPermitted: true
         ))
 
         guard controlWorked else { return results }
@@ -356,7 +367,8 @@ public enum CrossBoundaryProbe {
             errnoNumber: controlRC == 0 ? 0 : Int(currentErrno()),
             interpretation: controlRC == 0
                 ? "rename() works inside the container, so the cross-boundary result below is meaningful."
-                : "rename() failed even inside the container, so the cross-boundary test is not interpretable."
+                : "rename() failed even inside the container, so the cross-boundary test is not interpretable.",
+            expectedPermitted: true
         ))
         POSIXShim.unlinkFile(controlDest)
 

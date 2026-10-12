@@ -99,6 +99,21 @@ final class CrossBoundaryProbeTests: XCTestCase {
         }
     }
 
+    func testControlsAreNotFlaggedAsBoundaryViolations() throws {
+        // A control succeeding inside the container is the expected outcome and
+        // must not be reported as a violation.
+        for experiment in battery() {
+            if experiment.id == "hardlink-control" || experiment.id == "rename-control" {
+                XCTAssertTrue(experiment.expectedPermitted,
+                              "\(experiment.id) should be marked expected-permitted")
+                if experiment.outcome == .permitted {
+                    XCTAssertFalse(experiment.isBoundaryViolation,
+                                   "\(experiment.id) succeeded inside the container but was flagged")
+                }
+            }
+        }
+    }
+
     func testBatteryLeavesNoArtefactsBehind() throws {
         _ = battery()
         let documents = container + "/Documents"
