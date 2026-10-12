@@ -980,7 +980,22 @@ private struct ScaledMono: View {
             .lineLimit(lineLimit)
             .truncationMode(truncation)
             .fixedSize(horizontal: false, vertical: true)
-            .textSelection(selectable ? .enabled : .disabled)
+            .modifier(OptionalTextSelection(selectable: selectable))
+    }
+}
+
+/// `textSelection` takes different types for enabled and disabled, so a ternary
+/// cannot choose between them. This applies the right one without a branch in the
+/// modifier chain.
+private struct OptionalTextSelection: ViewModifier {
+    let selectable: Bool
+
+    func body(content: Content) -> some View {
+        if selectable {
+            content.textSelection(.enabled)
+        } else {
+            content.textSelection(.disabled)
+        }
     }
 }
 
