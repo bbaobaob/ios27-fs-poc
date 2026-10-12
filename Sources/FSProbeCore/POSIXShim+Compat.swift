@@ -44,8 +44,13 @@ private struct CompatStat {
 
 extension POSIXShim {
 
+    // See the Darwin shim: open() is variadic, so the mode is applied with
+    // fchmod() rather than passed as a variadic argument.
     @_silgen_name("open")
-    private static func cOpen(_ path: UnsafePointer<CChar>, _ flags: Int32, _ mode: UInt32) -> Int32
+    private static func cOpen(_ path: UnsafePointer<CChar>, _ flags: Int32) -> Int32
+
+    @_silgen_name("fchmod")
+    private static func cFchmod(_ fd: Int32, _ mode: UInt16) -> Int32
 
     @_silgen_name("close")
     private static func cClose(_ fd: Int32) -> Int32
@@ -75,7 +80,11 @@ extension POSIXShim {
     private static func cReadlink(_ path: UnsafePointer<CChar>, _ buffer: UnsafeMutableRawPointer, _ size: Int) -> Int
 
     public static func openFile(_ path: String, _ flags: Int32, _ mode: UInt32) -> Int32 {
-        return path.withCString { cOpen($0, flags, mode) }
+        let fd = path.withCString { cOpen($0, flags) }
+        if fd >= 0, flags & O_CREAT != 0 {
+            _ = cFchmod(fd, UInt16(mode & 0o7777))
+        }
+        return fd
     }
 
     @discardableResult

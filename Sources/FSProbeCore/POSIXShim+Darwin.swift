@@ -15,11 +15,26 @@ import Darwin
 
 extension POSIXShim {
 
+    // open() is variadic: int open(const char *, int, ...). Calling it through a
+    // non-variadic declaration leaves the varargs save area uninitialised, so the
+    // mode argument reaches the kernel as garbage. That was observed directly:
+    // a file created with mode 0o644 came out as 0600 on Linux and with a mode
+    // that denied read on macOS, which broke every write probe's read-back with
+    // EACCES. The mode is therefore set afterwards with fchmod(), which is an
+    // ordinary non-variadic function.
     @_silgen_name("open")
-    private static func cOpen(_ path: UnsafePointer<CChar>, _ flags: Int32, _ mode: UInt32) -> Int32
+    private static func cOpen(_ path: UnsafePointer<CChar>, _ flags: Int32) -> Int32
+
+    @_silgen_name("fchmod")
+    private static func cFchmod(_ fd: Int32, _ mode: UInt16) -> Int32
 
     public static func openFile(_ path: String, _ flags: Int32, _ mode: UInt32) -> Int32 {
-        return path.withCString { cOpen($0, flags, mode) }
+        let fd = path.withCString { cOpen($0, flags) }
+        // Only creations need the mode; opening an existing file ignores it.
+        if fd >= 0, flags & O_CREAT != 0 {
+            _ = cFchmod(fd, UInt16(mode & 0o7777))
+        }
+        return fd
     }
 
     @discardableResult

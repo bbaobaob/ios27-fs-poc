@@ -174,3 +174,44 @@ final class MatrixRunnerWriteTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: leftover))
     }
 }
+
+// Reproduces the read-back failure in CI: a file created through
+// POSIXShim.openFile with mode 0o644 was not readable afterwards (EACCES on the
+// read-back open). If open()'s variadic mode argument is not surviving the
+// @_silgen_name binding, the file is created with a mode that denies read.
+final class OpenFileModeTests: XCTestCase {
+
+    var root: String!
+
+    override func setUpWithError() throws {
+        root = NSTemporaryDirectory() + "fsprobe-mode-\(UUID().uuidString)"
+        try FileManager.default.createDirectory(atPath: root, withIntermediateDirectories: true)
+    }
+
+    override func tearDownWithError() throws {
+        if let root = root { try? FileManager.default.removeItem(atPath: root) }
+    }
+
+    func testCreatedFileIsReadableAndHasTheRequestedMode() throws {
+        let path = root + "/modecheck.bin"
+        let fd = POSIXShim.openFile(path, O_CREAT | O_EXCL | O_WRONLY, 0o644)
+        XCTAssertGreaterThanOrEqual(fd, 0, "create should succeed")
+        if fd >= 0 {
+            let written = "hello".withCString { ptr in
+                POSIXShim.writeFD(fd, ptr, 5)
+            }
+            XCTAssertEqual(written, 5)
+            POSIXShim.closeFile(fd)
+        }
+
+        // The mode must permit reading, or the read-back cannot work.
+        let attributes = try FileManager.default.attributesOfItem(atPath: path)
+        let mode = (attributes[.posixPermissions] as? NSNumber)?.intValue
+        XCTAssertEqual(mode, 0o644, "created file has mode \(String(mode ?? -1, radix: 8))")
+
+        // And it must actually be openable for reading.
+        let readFD = POSIXShim.openFile(path, O_RDONLY, 0)
+        XCTAssertGreaterThanOrEqual(readFD, 0, "read-back open failed")
+        if readFD >= 0 { POSIXShim.closeFile(readFD) }
+    }
+}
