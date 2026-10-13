@@ -452,3 +452,56 @@ Two hypotheses were closed with evidence rather than assumption: the enumeration
 differential (`opendir` and `getattrlistbulk` are both enforced) and the
 sandbox-profile extraction (the metadata plist is readable on the simulator but
 carries no `SandboxProfileData`, and on the device it is refused entirely).
+
+---
+
+## Round 4: service-mediated authorization (XPC / confused deputy)
+
+The mission directed a shift from testing what *this process* can do to what it can
+make a *privileged service* do on its behalf. Two things were established.
+
+### Rejected hypothesis: service enumeration is not possible on iOS
+
+The plan was to probe which mach services a sandboxed app can reach. The iOS SDK
+itself falsifies it:
+
+- `NSXPCConnection(machServiceName:options:)` is `API_UNAVAILABLE(ios, watchos, tvos)`
+- `xpc_connection_create_mach_service` is likewise unavailable
+
+An ordinary iOS app **cannot open a connection to an arbitrary mach service by
+name**. The only supported route is a listener endpoint that a service hands the
+app explicitly, which requires the service to cooperate. This is recorded as a
+rejected hypothesis with its evidence; the eight candidate services remain
+documented as the attack surface, with no claim that any is reachable.
+
+### What remains viable, and what it showed
+
+`NSFileCoordinator` is a public API whose read and write coordination is performed
+by a system service on the caller's behalf — the deputy shape. The module
+coordinates a read and a write on URLs outside the container, each with a control
+inside the container.
+
+**Simulator result (iOS 26.2):**
+
+| Experiment | Outcome |
+|---|---|
+| `coordinator-control` (inside container) | permitted — 28 bytes read |
+| `coordinator-read-outside` (`/var/mobile/Library`) | coordination granted, **0 bytes read** |
+| `coordinator-write-outside` | coordination granted, **no file landed** |
+
+An earlier version of the harness flagged the last two as boundary violations. On
+inspection both were the harness overstating the result: `NSFileCoordinator`
+*coordinates* access to a URL, it does not *grant* it. Coordination returning
+without an error while the read underneath is refused, or while no file appears at
+the destination, is the expected shape — not a primitive.
+
+The verdicts now require the security-relevant effect: bytes actually read, or a
+file actually present at the destination. With that correction the simulator shows
+no violation, which is the honest reading of the evidence.
+
+### What is unresolved
+
+The device run of this build has not been performed. On the device the sandbox
+governs `/var/mobile/Library` (the simulator's is the macOS host's), so the device
+result is the interpretable one — and the expected result is the same as the
+simulator's: coordination granted, read refused, nothing written.
