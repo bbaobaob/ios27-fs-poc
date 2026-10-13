@@ -47,6 +47,8 @@ public struct CapabilityMatrix: Sendable {
     public let machServices: [CrossProcessProbe.MachServiceProbe]?
     /// Whether an ordinary app can observe or control another process.
     public let processIntrospection: CrossProcessProbe.IntrospectionReport?
+    /// cfprefsd tested as a confused deputy through UserDefaults.
+    public let preferenceDeputy: PreferenceDeputyProbe.Result?
 
     /// Results of testing whether a user-granted scope is confined to what the
     /// user picked. Nil until the user grants access.
@@ -68,7 +70,8 @@ public struct CapabilityMatrix: Sendable {
         xpcServices: [XPCProbe.ServiceProbe]? = nil,
         fileCoordinator: XPCProbe.CoordinatorResult? = nil,
         machServices: [CrossProcessProbe.MachServiceProbe]? = nil,
-        processIntrospection: CrossProcessProbe.IntrospectionReport? = nil
+        processIntrospection: CrossProcessProbe.IntrospectionReport? = nil,
+        preferenceDeputy: PreferenceDeputyProbe.Result? = nil
     ) {
         self.results = results
         self.environment = environment
@@ -84,6 +87,7 @@ public struct CapabilityMatrix: Sendable {
         self.fileCoordinator = fileCoordinator
         self.machServices = machServices
         self.processIntrospection = processIntrospection
+        self.preferenceDeputy = preferenceDeputy
     }
 
     /// Platform context captured at run time.

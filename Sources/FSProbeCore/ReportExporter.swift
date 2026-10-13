@@ -287,6 +287,27 @@ public enum ReportExporter {
             }
         }
 
+        if let deputy = matrix.preferenceDeputy {
+            lines.append("")
+            lines.append("cfprefsd as a confused deputy (UserDefaults suite resolution):")
+            for experiment in deputy.experiments {
+                let flag = experiment.isBoundaryViolation ? "  <-- BOUNDARY VIOLATION" : ""
+                lines.append("  [\(experiment.outcome.rawValue)] \(experiment.id)\(flag)")
+                lines.append("      \(experiment.operation)  args: \(experiment.arguments)")
+                if let observed = experiment.observed {
+                    lines.append("      observed: \(observed)")
+                }
+                lines.append("      result: \(experiment.interpretation)")
+            }
+            if !deputy.violations.isEmpty {
+                lines.append("  VIOLATIONS: \(deputy.violations.map { $0.id }.joined(separator: ", "))")
+            } else if deputy.experiments.isEmpty {
+                lines.append("  NOT_ATTEMPTED: no preference experiment ran.")
+            } else {
+                lines.append("  every write landed inside this container, as the policy predicts")
+            }
+        }
+
         if let io = matrix.inodeOpen {
             lines.append("")
             lines.append("Open-by-inode (openbyid_np: no path traversal at all):")
@@ -401,6 +422,7 @@ public enum ReportExporter {
         let securityScopeAfterRelease: SecurityScopeProbe.Result?
         let machServices: [CrossProcessProbe.MachServiceProbe]?
         let processIntrospection: CrossProcessProbe.IntrospectionReport?
+        let preferenceDeputy: PreferenceDeputyProbe.Result?
 
         init(matrix: CapabilityMatrix) {
             self.schema = "fsprobe.capability-matrix.v9"
@@ -418,6 +440,7 @@ public enum ReportExporter {
             self.fileCoordinator = matrix.fileCoordinator
             self.machServices = matrix.machServices
             self.processIntrospection = matrix.processIntrospection
+            self.preferenceDeputy = matrix.preferenceDeputy
         }
     }
 }

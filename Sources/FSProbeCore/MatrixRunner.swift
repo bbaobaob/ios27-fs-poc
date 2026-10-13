@@ -57,6 +57,7 @@ public struct MatrixRunner: Sendable {
         var fileCoordinator: XPCProbe.CoordinatorResult?
         var machServices: [CrossProcessProbe.MachServiceProbe]?
         var processIntrospection: CrossProcessProbe.IntrospectionReport?
+        var preferenceDeputy: PreferenceDeputyProbe.Result?
         if runBoundaryExperiments {
             // The container is the app's own home; every experiment is scoped to
             // it and to paths it cannot reach.
@@ -102,6 +103,11 @@ public struct MatrixRunner: Sendable {
             // Cross-process introspection. The self-targeting control runs
             // first and gates the interpretation of every other attempt.
             processIntrospection = CrossProcessProbe.probeProcessIntrospection()
+
+            // cfprefsd is reachable (measured), and it writes files on the
+            // caller's behalf. Test whether it resolves a caller-supplied suite
+            // name against this container or against a global location.
+            preferenceDeputy = PreferenceDeputyProbe.probe(containerPath: container)
         }
 
         return CapabilityMatrix(
@@ -116,7 +122,8 @@ public struct MatrixRunner: Sendable {
             xpcServices: xpcServices,
             fileCoordinator: fileCoordinator,
             machServices: machServices,
-            processIntrospection: processIntrospection
+            processIntrospection: processIntrospection,
+            preferenceDeputy: preferenceDeputy
         )
     }
 }

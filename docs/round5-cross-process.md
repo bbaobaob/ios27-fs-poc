@@ -96,48 +96,105 @@ trustworthy as evidence. The relevant ones for this module:
 - "Not probed" must never be printed for a path that *was* probed and denied.
 - Symbol-resolution failure is `NOT_ATTEMPTED`, not a denial.
 
-## Outcome
+## Outcome — device result recorded
 
-**Device result outstanding.** The IPA containing this experiment is built and
-verified (correct `Payload/` layout, arm64 device binary, experiment linked).
+**Device:** iPhone12,5, iOS 27.0 build 24A437, stock, unsigned IPA signed
+off-device. Run at 2026-10-13T09:38:53Z, container
+`687A75DA-3415-469E-83F4-3E5EE328B2BD`.
 
-### Calibration run — macOS simulator, iOS 26.2 (NOT an iOS finding)
+### Hypothesis 2 — cross-process introspection: FALSIFIED
 
-The simulator shares the macOS host filesystem, services, and kernel, so nothing
-below is evidence about iOS. It is recorded because it calibrates the instrument:
-
-| Observation | Value | What it establishes |
+| Operation | Target | Result |
 |---|---|---|
-| connection factory resolved | 8 of 8 | dlsym reaches the symbol; the experiment is runnable |
-| negative control | refused, "Connection invalid", 3 ms | the refusal signature is measurable and distinguishable |
-| 4 of 7 candidates | reachable (full timeout) | on macOS these services accept connections |
-| 3 of 7 candidates | refused, same signature as the control | indistinguishable from "no such service" |
-| `proc_pidpath` self | succeeded, own path | **the control works** |
-| `proc_pidpath` launchd (pid 1) | **succeeded, `/sbin/launchd`** | **the detector fires on a real disclosure** |
-| `proc_pidpath` kernel (pid 0) | `ESRCH`, not applicable | a non-event is not reported as a denial |
-| `task_for_pid` both | denied, `(os/kern) failure` | the isolation boundary holds here |
-| `proc_listallpids` | 179 pids visible | identifier visibility is not a violation |
+| `proc_pidpath` | self | **succeeded**, 99 bytes, own bundle path |
+| `proc_pidpath` | launchd (pid 1) | **denied, EPERM** |
+| `proc_pidpath` | kernel (pid 0) | **denied, EPERM** |
+| `task_for_pid` | launchd, kernel | **denied, kern_return_t 5** |
+| `proc_listallpids` | all | **denied, EPERM** |
 
-The `proc_pidpath` result on pid 1 is the important one: the experiment reported
-a genuine information disclosure rather than a denial. That proves the detector
-is not hard-wired to answer "denied", which is what makes an iOS negative result
-meaningful. On macOS this is expected behaviour, not a vulnerability — the
-distinction is the whole reason the device run is required.
+The control succeeded, so the refusals are interpretable as policy denials
+rather than as a broken API. Compare the macOS calibration run, where
+`proc_listallpids` returned 179 pids: the same code reports success when success
+is available, so the iOS refusals are real.
 
-### What the device run must show
+**Instrumentation defect found and fixed while reading this result.** The
+original build reported pid 1 and pid 0 as `notApplicable` with EPERM, and the
+interpretation claimed "EPERM indicates the target has no executable path rather
+than that access was refused." That was wrong twice over:
 
-On iOS 27.0 the sandbox governs both the filesystem and the mach-lookup gate,
-so the expected results are:
+1. errno was not cleared before the call, so pid 0's EPERM may have been
+   inherited from pid 1's — an artifact of loop order, not a measurement.
+2. EPERM is the sandbox denial signature, the same value every other denied
+   operation on this device produced. Reporting it as "not a security
+   observation" would have discarded a correct denial.
 
-- the connection factory resolves (the symbol exists in the runtime),
-- the negative control is refused,
-- every candidate is refused, and — critically — **with the same signature as
-  the negative control**, which distinguishes "denied by policy" from "no such
-  service",
-- `proc_pidpath` on pid 1 and 0 is refused while the self-control succeeds,
-- `task_for_pid` on both is refused.
+Fixed by clearing errno before the call and classifying a zero return with errno
+set as `.denied`. The device result above is from the *fixed* logic applied to
+the recorded values.
 
-If any candidate does *not* match the negative control's signature, or
-`proc_pidpath` returns another process's path, or `task_for_pid` returns a port,
-that is the finding.
+### Hypothesis 1 — mach-lookup: PREVIOUS CONCLUSION FALSIFIED, AVENUE OPEN
+
+The round-4 claim that an ordinary iOS app cannot open a mach service by name
+was hard-coded, not measured. Measurement refutes it:
+
+| Service | Result | Timing |
+|---|---|---|
+| negative control (nonexistent) | refused, "Connection invalid" | 0 ms |
+| `com.apple.FileCoordination` | **reachable** | 3005 ms |
+| `com.apple.cfprefsd.daemon` | **reachable** | 3005 ms |
+| `com.apple.containermanagerd` | **reachable** | 3002 ms |
+| `com.apple.containermanagerd.system` | **reachable** | 3002 ms |
+| `com.apple.coreservices.quarantine-resolver` | refused, same signature | 1 ms |
+| `com.apple.mobile.installation_proxy` | refused, same signature | 0 ms |
+| `com.apple.LaunchServices` | refused, same signature | 0 ms |
+
+The negative control is what makes this readable. Three services were refused
+with the *identical* signature and reason as a name that cannot exist, while four
+produced no interruption at all across a three-second window — the lookup was
+permitted and the service is registered. So the mach-lookup gate is enforced
+**per service**, and an ordinary app is permitted to reach at least these four.
+
+**This is not itself a vulnerability.** Reachability is reconnaissance. Two of
+the four back documented public APIs this app already uses (`NSFileCoordinator`
+worked in the control experiment, and every app uses `UserDefaults`), so their
+reachability is expected. What changed is that the avenue is open and must now
+be tested with real requests.
+
+### Next experiment, now justified by measurement
+
+`com.apple.cfprefsd.daemon` is reachable and is a privileged daemon that writes
+files on the caller's behalf. `PreferenceDeputyProbe` tests whether it resolves
+a caller-supplied suite name against the caller's own container or against a
+global location, using `UserDefaults(suiteName:)` — the documented public
+surface, not an invented protocol.
+
+The discriminating signal is location: a suite this app owns must produce a file
+inside this container (the control), and a foreign suite name must likewise land
+here. If the write reports success but no such file appears here, the daemon
+resolved the name against something outside this container.
+
+The control gates the test case. On a platform whose preference storage is
+elsewhere, "no file appeared" cannot distinguish a cross-container write from an
+ordinary write to the platform's own location — running the test anyway would
+report a false finding, so it is withheld and the case reports
+`notApplicable`.
+
+### Consolidated negative results (all measured on iOS 27.0)
+
+Filesystem: ancestor ascent, `..` traversal, symlink escape, dirfd-relative
+escape, `link()` from `/usr/lib/dyld`, same-volume `rename()` to the container
+parent, directory enumeration (POSIX and Foundation), `openbyid_np` on nine
+paths, `clonefile()` outward to `/var/mobile/Media`, `clonefile()` inward
+(EXDEV, cross-volume, not attributable). All refused; the container write map
+matches the documented profile.
+
+Cross-process: `proc_pidpath`, `task_for_pid`, `proc_listallpids` on other
+processes. All refused, with a working self-control.
+
+Service-mediated: `NSFileCoordinator` granted coordination but the underlying
+read and write were refused (`NSCocoaErrorDomain 513`) — coordination is not
+authorization.
+
+**No boundary violation has been demonstrated.** The mach-lookup avenue is open
+and is the next thing to test with a real request.
 

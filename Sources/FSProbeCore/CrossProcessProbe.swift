@@ -583,10 +583,11 @@ public enum CrossProcessProbe {
                 other than the caller is not disclosed, which is the expected boundary.
                 """
         case .notApplicable:
+            // Reached only when errno is clear, so no denial is implied and no
+            // error name is available to quote.
             return """
-                No path was returned, and no denial is implied: \(errorName ?? "the call") \
-                indicates the target has no executable path rather than that access \
-                was refused. This is not a security observation.
+                No path was returned and no error was reported, so this is not a \
+                denial and not a security observation.
                 """
         case .notAttempted:
             return "The call was not attempted, so nothing is claimed about the boundary."
@@ -609,6 +610,13 @@ public enum CrossProcessProbe {
         )
         defer { buffer.deallocate() }
 
+        // Clear errno first. Without this the value read after the call may be
+        // stale from the previous attempt, which would make the reported error an
+        // artifact of loop order rather than a measurement. This bit the
+        // introspection experiment directly: pid 0 reported EPERM only because
+        // pid 1 had just set it, so the "kernel has no executable path"
+        // interpretation was derived from an inherited errno.
+        setErrno(0)
         let rc = cProcPidPath(pid, buffer, UInt32(pidPathBufferSize))
         if rc > 0 {
             let path = String(cString: buffer.assumingMemoryBound(to: CChar.self))
@@ -616,13 +624,21 @@ public enum CrossProcessProbe {
                 outcome: .succeeded, value: path, length: Int(rc), errorName: nil
             )
         }
-        // rc == 0 with no error is "no path for this pid"; rc < 0 carries errno.
-        // errno is read immediately, before any other call can disturb it.
+
+        // proc_pidpath returns 0 on failure and sets errno. A zero return with
+        // errno set is a refusal: EPERM here is the sandbox signature, the same
+        // one every other denied operation on this device produced. Only a zero
+        // return with errno clear means "this process has no executable path",
+        // which is not a security event.
         let err = currentErrno()
-        let name = err == 0 ? nil : ErrorClassifier.errnoName(err)
+        if err != 0 {
+            return PidPathResult(
+                outcome: .denied, value: nil, length: 0,
+                errorName: ErrorClassifier.errnoName(err)
+            )
+        }
         return PidPathResult(
-            outcome: rc < 0 ? .denied : .notApplicable,
-            value: nil, length: 0, errorName: name
+            outcome: .notApplicable, value: nil, length: 0, errorName: nil
         )
     }
 
