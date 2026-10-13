@@ -98,4 +98,46 @@ trustworthy as evidence. The relevant ones for this module:
 
 ## Outcome
 
-_Pending device run._
+**Device result outstanding.** The IPA containing this experiment is built and
+verified (correct `Payload/` layout, arm64 device binary, experiment linked).
+
+### Calibration run — macOS simulator, iOS 26.2 (NOT an iOS finding)
+
+The simulator shares the macOS host filesystem, services, and kernel, so nothing
+below is evidence about iOS. It is recorded because it calibrates the instrument:
+
+| Observation | Value | What it establishes |
+|---|---|---|
+| connection factory resolved | 8 of 8 | dlsym reaches the symbol; the experiment is runnable |
+| negative control | refused, "Connection invalid", 3 ms | the refusal signature is measurable and distinguishable |
+| 4 of 7 candidates | reachable (full timeout) | on macOS these services accept connections |
+| 3 of 7 candidates | refused, same signature as the control | indistinguishable from "no such service" |
+| `proc_pidpath` self | succeeded, own path | **the control works** |
+| `proc_pidpath` launchd (pid 1) | **succeeded, `/sbin/launchd`** | **the detector fires on a real disclosure** |
+| `proc_pidpath` kernel (pid 0) | `ESRCH`, not applicable | a non-event is not reported as a denial |
+| `task_for_pid` both | denied, `(os/kern) failure` | the isolation boundary holds here |
+| `proc_listallpids` | 179 pids visible | identifier visibility is not a violation |
+
+The `proc_pidpath` result on pid 1 is the important one: the experiment reported
+a genuine information disclosure rather than a denial. That proves the detector
+is not hard-wired to answer "denied", which is what makes an iOS negative result
+meaningful. On macOS this is expected behaviour, not a vulnerability — the
+distinction is the whole reason the device run is required.
+
+### What the device run must show
+
+On iOS 27.0 the sandbox governs both the filesystem and the mach-lookup gate,
+so the expected results are:
+
+- the connection factory resolves (the symbol exists in the runtime),
+- the negative control is refused,
+- every candidate is refused, and — critically — **with the same signature as
+  the negative control**, which distinguishes "denied by policy" from "no such
+  service",
+- `proc_pidpath` on pid 1 and 0 is refused while the self-control succeeds,
+- `task_for_pid` on both is refused.
+
+If any candidate does *not* match the negative control's signature, or
+`proc_pidpath` returns another process's path, or `task_for_pid` returns a port,
+that is the finding.
+
