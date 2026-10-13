@@ -326,6 +326,62 @@ Every operation refused with EPERM on `/var/mobile/Library` and
 `/var/mobile/Media`, with the control inside the container answering. Any
 `answered` or `absent` result on a protected path is the finding.
 
+## Round 8 — primitives reachable through a descriptor
+
+Status: **implemented, device result outstanding.**
+
+### The mechanism
+
+Every experiment so far asked for a *path* and was refused. One mechanism works
+differently and has never been tested: obtain a **descriptor** for a protected
+object, then operate through the descriptor.
+
+`O_EVTONLY` is a Darwin-specific open flag that requests an event-only
+descriptor rather than a readable one. Whether the sandbox authorizes it as a
+distinct, weaker operation from `file-read-data` has never been tested here.
+
+If a descriptor for a protected directory can be obtained, a second question
+follows immediately, and it is the one that matters: what can be done *through*
+it? Three calls take a descriptor rather than a path, and each is a separate
+sandbox predicate:
+
+| Call | What it would give |
+|---|---|
+| `fgetattrlist()` | attributes through a descriptor |
+| `fgetxattr()` | extended attributes through a descriptor |
+| `getdirentriesattr()` | **directory entries through a descriptor** |
+
+`getdirentriesattr` is the prize. If it works on a descriptor for a protected
+directory, the directory is enumerated without the app ever holding permission to
+read it by path — a read primitive, and the strongest possible result of this
+experiment.
+
+### Why this is not a repeat of an earlier test
+
+`openbyid_np` with `O_EVTONLY` was tested and refused, but that opens *by inode*
+with identifiers from `lstat`. This opens *by path* with a flag that requests
+something weaker than a read. Different call, different predicate, different
+question.
+
+### Controls
+
+The `O_EVTONLY` open is the gate. Its control runs inside the container and must
+succeed; if it does not, every descriptor-based step reports
+`prerequisiteFailed` rather than `denied`, because a refusal there would say
+nothing about that operation's own authorization.
+
+### Safety
+
+Read-only. Descriptors are closed immediately. Nothing is written, created, or
+removed. `getdirentriesattr` is asked only for entry names — the minimum needed
+to learn whether enumeration is possible.
+
+### Expected device result
+
+The `O_EVTONLY` open refused with EPERM, and every descriptor step
+`prerequisiteFailed`. If the open succeeds, `getdirentriesattr` returning a
+non-zero entry count is the finding.
+
 ## Consolidated negative results (all measured on iOS 27.0)
 
 Filesystem: ancestor ascent, `..` traversal, symlink escape, dirfd-relative

@@ -53,6 +53,8 @@ public struct CapabilityMatrix: Sendable {
     public let operationClasses: FileOperationClassProbe.Result?
     /// Read primitives that do not open the file.
     public let metadataReads: MetadataReadProbe.Result?
+    /// Primitives reachable through a descriptor rather than a path.
+    public let descriptorPrimitives: DescriptorPrimitiveProbe.Result?
 
     /// Results of testing whether a user-granted scope is confined to what the
     /// user picked. Nil until the user grants access.
@@ -77,7 +79,8 @@ public struct CapabilityMatrix: Sendable {
         processIntrospection: CrossProcessProbe.IntrospectionReport? = nil,
         preferenceDeputy: PreferenceDeputyProbe.Result? = nil,
         operationClasses: FileOperationClassProbe.Result? = nil,
-        metadataReads: MetadataReadProbe.Result? = nil
+        metadataReads: MetadataReadProbe.Result? = nil,
+        descriptorPrimitives: DescriptorPrimitiveProbe.Result? = nil
     ) {
         self.results = results
         self.environment = environment
@@ -96,6 +99,7 @@ public struct CapabilityMatrix: Sendable {
         self.preferenceDeputy = preferenceDeputy
         self.operationClasses = operationClasses
         self.metadataReads = metadataReads
+        self.descriptorPrimitives = descriptorPrimitives
     }
 
     /// Platform context captured at run time.

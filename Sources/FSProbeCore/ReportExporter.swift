@@ -353,6 +353,31 @@ public enum ReportExporter {
             }
         }
 
+        if let descriptors = matrix.descriptorPrimitives {
+            lines.append("")
+            lines.append("Primitives reachable through a descriptor:")
+            for step in descriptors.steps {
+                let flag = step.isBoundaryViolation ? "  <-- BOUNDARY VIOLATION" : ""
+                lines.append("  [\(step.outcome.rawValue)] \(step.id)\(flag)")
+                lines.append("      \(step.operation)  args: \(step.arguments)")
+                if let errno = step.errnoName {
+                    lines.append("      errno: \(errno)")
+                }
+                if let count = step.entryCount {
+                    lines.append("      entries: \(count)")
+                }
+                lines.append("      observed: \(step.observed ?? "no answer")")
+                lines.append("      result: \(step.interpretation)")
+            }
+            if !descriptors.violations.isEmpty {
+                lines.append("  VIOLATIONS: \(descriptors.violations.map { $0.id }.joined(separator: ", "))")
+            } else if descriptors.steps.isEmpty {
+                lines.append("  NOT_ATTEMPTED: no descriptor experiment ran.")
+            } else {
+                lines.append("  no descriptor primitive succeeded where the policy predicts refusal")
+            }
+        }
+
         if let io = matrix.inodeOpen {
             lines.append("")
             lines.append("Open-by-inode (openbyid_np: no path traversal at all):")
@@ -470,6 +495,7 @@ public enum ReportExporter {
         let preferenceDeputy: PreferenceDeputyProbe.Result?
         let operationClasses: FileOperationClassProbe.Result?
         let metadataReads: MetadataReadProbe.Result?
+        let descriptorPrimitives: DescriptorPrimitiveProbe.Result?
 
         init(matrix: CapabilityMatrix) {
             self.schema = "fsprobe.capability-matrix.v9"
@@ -490,6 +516,7 @@ public enum ReportExporter {
             self.preferenceDeputy = matrix.preferenceDeputy
             self.operationClasses = matrix.operationClasses
             self.metadataReads = matrix.metadataReads
+            self.descriptorPrimitives = matrix.descriptorPrimitives
         }
     }
 }

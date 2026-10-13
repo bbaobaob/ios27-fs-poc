@@ -60,6 +60,7 @@ public struct MatrixRunner: Sendable {
         var preferenceDeputy: PreferenceDeputyProbe.Result?
         var operationClasses: FileOperationClassProbe.Result?
         var metadataReads: MetadataReadProbe.Result?
+        var descriptorPrimitives: DescriptorPrimitiveProbe.Result?
         if runBoundaryExperiments {
             // The container is the app's own home; every experiment is scoped to
             // it and to paths it cannot reach.
@@ -119,6 +120,11 @@ public struct MatrixRunner: Sendable {
             // Read primitives that never open the file. Separate sandbox
             // predicates from file-read-data, and never tested in this project.
             metadataReads = MetadataReadProbe.probe(containerPath: container)
+
+            // Descriptor-based primitives. Obtaining an event-only descriptor for
+            // a protected object and then operating through it is a separate
+            // authorization question from every path-based experiment so far.
+            descriptorPrimitives = DescriptorPrimitiveProbe.probe(containerPath: container)
         }
 
         return CapabilityMatrix(
@@ -136,7 +142,8 @@ public struct MatrixRunner: Sendable {
             processIntrospection: processIntrospection,
             preferenceDeputy: preferenceDeputy,
             operationClasses: operationClasses,
-            metadataReads: metadataReads
+            metadataReads: metadataReads,
+            descriptorPrimitives: descriptorPrimitives
         )
     }
 }
