@@ -331,6 +331,28 @@ public enum ReportExporter {
             }
         }
 
+        if let metadata = matrix.metadataReads {
+            lines.append("")
+            lines.append("Read primitives that do not open the file:")
+            for experiment in metadata.experiments {
+                let flag = experiment.isBoundaryViolation ? "  <-- BOUNDARY VIOLATION" : ""
+                lines.append("  [\(experiment.outcome.rawValue)] \(experiment.id)\(flag)")
+                lines.append("      \(experiment.operation)  args: \(experiment.arguments)")
+                if let errno = experiment.errnoName {
+                    lines.append("      errno: \(errno)")
+                }
+                lines.append("      observed: \(experiment.observed ?? "no answer")")
+                lines.append("      result: \(experiment.interpretation)")
+            }
+            if !metadata.violations.isEmpty {
+                lines.append("  VIOLATIONS: \(metadata.violations.map { $0.id }.joined(separator: ", "))")
+            } else if metadata.experiments.isEmpty {
+                lines.append("  NOT_ATTEMPTED: no metadata-read experiment ran.")
+            } else {
+                lines.append("  every read primitive was refused where the policy predicts refusal")
+            }
+        }
+
         if let io = matrix.inodeOpen {
             lines.append("")
             lines.append("Open-by-inode (openbyid_np: no path traversal at all):")
@@ -447,6 +469,7 @@ public enum ReportExporter {
         let processIntrospection: CrossProcessProbe.IntrospectionReport?
         let preferenceDeputy: PreferenceDeputyProbe.Result?
         let operationClasses: FileOperationClassProbe.Result?
+        let metadataReads: MetadataReadProbe.Result?
 
         init(matrix: CapabilityMatrix) {
             self.schema = "fsprobe.capability-matrix.v9"
@@ -466,6 +489,7 @@ public enum ReportExporter {
             self.processIntrospection = matrix.processIntrospection
             self.preferenceDeputy = matrix.preferenceDeputy
             self.operationClasses = matrix.operationClasses
+            self.metadataReads = matrix.metadataReads
         }
     }
 }

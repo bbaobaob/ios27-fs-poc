@@ -59,6 +59,7 @@ public struct MatrixRunner: Sendable {
         var processIntrospection: CrossProcessProbe.IntrospectionReport?
         var preferenceDeputy: PreferenceDeputyProbe.Result?
         var operationClasses: FileOperationClassProbe.Result?
+        var metadataReads: MetadataReadProbe.Result?
         if runBoundaryExperiments {
             // The container is the app's own home; every experiment is scoped to
             // it and to paths it cannot reach.
@@ -114,6 +115,10 @@ public struct MatrixRunner: Sendable {
             // distinct authorization predicate, and the reverse-direction link
             // case has never been run in either direction before.
             operationClasses = FileOperationClassProbe.probe(containerPath: container)
+
+            // Read primitives that never open the file. Separate sandbox
+            // predicates from file-read-data, and never tested in this project.
+            metadataReads = MetadataReadProbe.probe(containerPath: container)
         }
 
         return CapabilityMatrix(
@@ -130,7 +135,8 @@ public struct MatrixRunner: Sendable {
             machServices: machServices,
             processIntrospection: processIntrospection,
             preferenceDeputy: preferenceDeputy,
-            operationClasses: operationClasses
+            operationClasses: operationClasses,
+            metadataReads: metadataReads
         )
     }
 }

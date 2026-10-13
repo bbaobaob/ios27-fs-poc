@@ -273,6 +273,59 @@ runs. Creation operations avoid both problems: the target is a dedicated
 synthetic name in a directory the app cannot write to, so nothing existing is
 touched, and anything created is removed immediately.
 
+## Round 7 — read primitives that never open the file
+
+Status: **implemented, device result outstanding.**
+
+### The gap this closes
+
+Rounds 1–6 every one tested operations that *open* a file: `open()`, `opendir()`,
+`readdir()`, `lstat()`, `stat()`, `link()`, `rename()`, `clonefile()`,
+`openbyid_np()`. All were refused, consistently, with EPERM.
+
+That is a real result about those operations. It is not a result about the
+filesystem boundary as a whole, because Apple's sandbox authorizes operations
+rather than paths, and there is a class of read primitives that never opens a
+file at all:
+
+| Call | What it reads | Predicate |
+|---|---|---|
+| `getxattr()` | an extended attribute | `file-read-xattr` |
+| `listxattr()` | the attribute *names* | `file-list-xattr` |
+| `getattrlist()` | an arbitrary attribute set | its own |
+| `statfs()` | filesystem and mount metadata | its own |
+
+None of these has been tested in this project. If any is not confined to the
+container, an app gets a read primitive on protected paths without ever needing
+permission to open them.
+
+### The distinction the experiment turns on
+
+EPERM means the policy refused. ENOENT, ENOATTR, ENOTSUP and EINVAL mean
+something quite different: the path was resolved and authorized, and the call
+simply found nothing there.
+
+On a protected path, an *absent* answer rather than a refusal is the interesting
+result, because an unauthorized path never reaches the point of being found
+absent. That is why the classifier keeps `answered` and `absent` separate from
+`denied`, and why `isBoundaryViolation` fires on either of the former two.
+
+Getting this backwards in either direction is a real hazard: reporting ENOATTR as
+a denial would discard the finding, and reporting EPERM as "absent" would
+fabricate one. Both are asserted against by a test.
+
+### Safety
+
+Read-only calls on paths that exist. Nothing is written, created, or removed.
+The attribute name requested is a generic one chosen to probe the authorization
+check, not a name chosen to extract private data.
+
+### Expected device result
+
+Every operation refused with EPERM on `/var/mobile/Library` and
+`/var/mobile/Media`, with the control inside the container answering. Any
+`answered` or `absent` result on a protected path is the finding.
+
 ## Consolidated negative results (all measured on iOS 27.0)
 
 Filesystem: ancestor ascent, `..` traversal, symlink escape, dirfd-relative

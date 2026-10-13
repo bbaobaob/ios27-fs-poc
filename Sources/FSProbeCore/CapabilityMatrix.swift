@@ -51,6 +51,8 @@ public struct CapabilityMatrix: Sendable {
     public let preferenceDeputy: PreferenceDeputyProbe.Result?
     /// Sandbox operation classes not previously tested.
     public let operationClasses: FileOperationClassProbe.Result?
+    /// Read primitives that do not open the file.
+    public let metadataReads: MetadataReadProbe.Result?
 
     /// Results of testing whether a user-granted scope is confined to what the
     /// user picked. Nil until the user grants access.
@@ -74,7 +76,8 @@ public struct CapabilityMatrix: Sendable {
         machServices: [CrossProcessProbe.MachServiceProbe]? = nil,
         processIntrospection: CrossProcessProbe.IntrospectionReport? = nil,
         preferenceDeputy: PreferenceDeputyProbe.Result? = nil,
-        operationClasses: FileOperationClassProbe.Result? = nil
+        operationClasses: FileOperationClassProbe.Result? = nil,
+        metadataReads: MetadataReadProbe.Result? = nil
     ) {
         self.results = results
         self.environment = environment
@@ -92,6 +95,7 @@ public struct CapabilityMatrix: Sendable {
         self.processIntrospection = processIntrospection
         self.preferenceDeputy = preferenceDeputy
         self.operationClasses = operationClasses
+        self.metadataReads = metadataReads
     }
 
     /// Platform context captured at run time.
