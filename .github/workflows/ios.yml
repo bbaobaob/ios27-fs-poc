@@ -18,9 +18,22 @@ concurrency:
 jobs:
   build:
     name: Build FSProbe for iOS Simulator
-    runs-on: macos-15
+    # macos-26 carries Xcode 26.6, whose newest iOS SDK is 26.5. That is the closest
+    # SDK to iOS 27 any GitHub-hosted runner can provide — probed and recorded in
+    # docs/device-validation-log.md, not assumed. The device is the only iOS 27
+    # environment that exists; this build is compile validation and IPA production,
+    # never evidence about iOS behaviour.
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
+
+      - name: Select the newest Xcode
+        run: |
+          set -euo pipefail
+          sudo xcode-select -s /Applications/Xcode_26.6.app/Contents/Developer
+          xcodebuild -version
+          echo "--- iOS SDKs available ---"
+          xcodebuild -showsdks | grep -i ios
 
       - name: Regenerate the Xcode project from source
         run: python3 scripts/generate_xcode_project.py

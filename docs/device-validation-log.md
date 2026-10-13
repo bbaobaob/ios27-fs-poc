@@ -72,9 +72,51 @@ expect from the current code is the one stated here.
 - Limitations: this is not iOS. Sandbox behaviour, `EPERM` semantics, and container layout on iOS
   are untested.
 
-### iOS 27 physical device
+### iOS 27 physical device — RECORDED (three runs)
 
-_Pending — to be filled in when a signed build can be installed on the target iPhone._
+The blocker recorded above was cleared: a signed build was installed on a physical iPhone running
+stock iOS 27.0. Every device result in this repository comes from these runs, and from nowhere else.
+
+| Field | Value |
+| --- | --- |
+| Exact iOS version and build | **iOS 27.0, build 24A437** |
+| Device model | iPhone12,5 (iPhone 11 Pro Max) |
+| Signing context | development-signed with a free Apple ID, off-device (no Mac) |
+| Entitlements present | none beyond the default app sandbox |
+| Runs | 2026-10-13T05:06:42Z, 2026-10-13T09:38:53Z, 2026-10-13T12:34:04Z |
+| Reproduction | mach-lookup result reproduced across two independent runs |
+
+What these runs established: the filesystem capability matrix, ancestor ascent, boundary
+experiments, container write map, `openbyid_np`, `clonefile`, sandbox-profile metadata,
+`NSFileCoordinator` as a deputy, mach-service reachability, cross-process introspection, cfprefsd
+as a deputy, and the untested operation classes. See `docs/capability-matrix.md` and
+`docs/round5-cross-process.md`.
+
+**No simulator result in this repository is evidence about iOS.** The simulator shares the macOS
+host filesystem, services, and kernel, and applies a weaker sandbox; `/var/mobile` does not exist
+there. Simulator runs exist to compile-validate the app and to calibrate the instrument, and every
+one of them is labelled as such at the point of use.
+
+### Runner capability — probed, not assumed (2026-10-13)
+
+A dedicated workflow (`probe-runners.yml`) enumerated what each GitHub-hosted macOS runner image
+actually ships. Result:
+
+| Runner | Default Xcode | Newest iOS SDK | iOS 27 simulator runtime |
+| --- | --- | --- | --- |
+| `macos-15` | 16.4 | 18.5 | none (runtimes stop at 26.2) |
+| `macos-26` | 26.6 | **26.5** | **none** |
+| `macos-latest` | 26.6 | **26.5** | **none** |
+
+**GitHub-hosted runners cannot build against the iOS 27 SDK and cannot run an iOS 27 simulator.**
+This is measured from each image's own `xcodebuild -showsdks` and `xcrun simctl list runtimes`
+output, not inferred from a comment. The device is therefore the only iOS 27 environment available
+to this project, which makes the physical-device runs above load-bearing rather than optional.
+
+The `ios` workflow builds the device target on `macos-26` with Xcode 26.6 so the code is compiled
+against the newest SDK reachable (26.5) rather than 18.5. That is closer to iOS 27 and is the
+honest limit of what CI can provide; it is still not iOS 27, and the difference is recorded here
+rather than smoothed over.
 
 ### 2026-10-11 — iOS Simulator, runtime 26.2 (NOT a physical device)
 
