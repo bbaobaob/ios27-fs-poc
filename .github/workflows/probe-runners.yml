@@ -1,0 +1,53 @@
+name: probe-runners
+
+# Informational: which GitHub-hosted macOS runners carry an iOS 27 SDK and
+# simulator runtime. The macos-15 image tops out at iOS 26.2, so the research
+# target is not reachable there. This workflow establishes, rather than assumes,
+# whether a newer runner image does.
+#
+# This is a discovery step. It builds nothing and asserts nothing; it prints what
+# is available so the next decision is made on evidence.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 6 * * 1"
+
+jobs:
+  probe:
+    name: Probe runner images for iOS 27
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, macos-26, macos-15]
+    steps:
+      - name: Runner image
+        run: |
+          echo "=== runner: ${{ matrix.os }} ==="
+          sw_vers
+          echo "--- installed Xcode versions ---"
+          ls -1 /Applications 2>/dev/null | grep -i xcode || echo "none listed"
+          xcodebuild -version 2>/dev/null || echo "xcodebuild unavailable"
+          echo "--- selected developer dir ---"
+          xcode-select -p
+
+      - name: Xcode versions on the image
+        run: |
+          set +e
+          # Some images ship several Xcodes under /Applications; list them all.
+          for dir in /Applications/Xcode*.app; do
+            [ -d "$dir" ] || continue
+            echo "--- $dir ---"
+            "$dir/Contents/Developer/usr/bin/xcodebuild" -version 2>/dev/null
+          done
+          echo "--- SDKs visible to the default toolchain ---"
+          xcodebuild -showsdks 2>/dev/null | grep -i "ios\|xros" || echo "no SDK listing"
+
+      - name: Simulator runtimes
+        run: |
+          set +e
+          echo "--- iOS simulator runtimes ---"
+          xcrun simctl list runtimes 2>/dev/null | grep -i "iOS" || echo "none"
+          echo "--- any runtime mentioning 27 ---"
+          xcrun simctl list runtimes 2>/dev/null | grep -i "27" || echo "NO iOS 27 RUNTIME on ${{ matrix.os }}"
