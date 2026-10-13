@@ -84,6 +84,38 @@ final class MetadataReadProbeTests: XCTestCase {
                       "no violation may be claimed where no measurement was made")
     }
 
+    func testANonexistentPathIsWithheldNotReportedAsAbsent() {
+        // The defect this guards against: on a platform where the protected path
+        // does not exist, every call returns ENOENT, which the classifier reads as
+        // "absent" -- and an absent answer on a protected path is defined as a
+        // boundary violation. That is a finding manufactured out of a path that
+        // was never there, and the macOS CI run produced exactly that.
+        //
+        // The rule: an absent answer is only meaningful when the path exists.
+        let root = NSTemporaryDirectory() + "fsprobe-meta-\(UUID().uuidString)"
+        try? FileManager.default.createDirectory(
+            atPath: root + "/Documents", withIntermediateDirectories: true
+        )
+        defer { try? FileManager.default.removeItem(atPath: root) }
+
+        let result = MetadataReadProbe.probe(containerPath: root)
+        for experiment in result.experiments {
+            if experiment.outcome == .notAttempted {
+                // Withheld. Must never be dressed up as a finding.
+                XCTAssertFalse(experiment.isBoundaryViolation)
+                XCTAssertNil(experiment.errnoName,
+                             "\(experiment.id) carries an errno but was not attempted")
+            }
+            // The load-bearing assertion: no violation may be claimed for a
+            // measurement that was never made.
+            if experiment.isBoundaryViolation {
+                XCTAssertNotEqual(experiment.outcome, .notAttempted)
+                XCTAssertNotEqual(experiment.outcome, .symbolUnavailable)
+            }
+        }
+        XCTAssertTrue(result.violations.allSatisfy { $0.outcome != .notAttempted })
+    }
+
     func testViolationListMatchesPerExperimentFlags() throws {
         let root = try scratchContainer()
         defer { try? FileManager.default.removeItem(atPath: root) }

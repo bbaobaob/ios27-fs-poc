@@ -153,6 +153,19 @@ public enum MetadataReadProbe {
         "/var/mobile/Media",
     ]
 
+    /// A byte count from a call, or zero.
+    ///
+    /// An "absent" answer is only meaningful when the path exists. If it does not,
+    /// ENOENT is simply the truth about a missing path and says nothing whatever
+    /// about the sandbox — reporting it as an authorization failure would
+    /// fabricate a finding out of a path that was never there. This guard is what
+    /// separates a measurement from an artifact, and it is why the macOS CI run
+    /// does not produce violations: `/var/mobile/Library` does not exist there.
+    private static func pathExists(_ path: String) -> Bool {
+        var buffer = StatBuffer()
+        return POSIXShim.statPath(path, followSymlink: false, into: &buffer) == 0
+    }
+
     // MARK: - Resolved symbols
     //
     // These are bound by symbol name rather than resolved through dlsym. The
@@ -251,6 +264,10 @@ public enum MetadataReadProbe {
             return unavailable("getxattr-\(directory)", "getxattr(path, name, NULL, 0, 0, 0)",
                               directory)
         }
+        if !pathExists(directory) {
+            return missingPath("getxattr-\(directory)",
+                               "getxattr(path, name, NULL, 0, 0, 0)", directory)
+        }
         let controlRC = callGetxattr(documents, probeAttributeName)
         let control = classify(controlRC)
         let rc = callGetxattr(directory, probeAttributeName)
@@ -293,6 +310,10 @@ public enum MetadataReadProbe {
         guard symbolsAvailable else {
             return unavailable("listxattr-\(directory)", "listxattr(path, NULL, 0, 0)", directory)
         }
+        if !pathExists(directory) {
+            return missingPath("listxattr-\(directory)",
+                               "listxattr(path, NULL, 0, 0)", directory)
+        }
         let controlRC = callListxattr(documents)
         let control = classify(controlRC)
         let rc = callListxattr(directory)
@@ -332,6 +353,10 @@ public enum MetadataReadProbe {
             return unavailable("getattrlist-\(directory)",
                               "getattrlist(path, &attrlist, buf, size, 0)", directory)
         }
+        if !pathExists(directory) {
+            return missingPath("getattrlist-\(directory)",
+                               "getattrlist(path, &attrlist, buf, size, 0)", directory)
+        }
         let controlRC = callGetattrlist(documents)
         let control = classify(controlRC)
         let rc = callGetattrlist(directory)
@@ -370,6 +395,9 @@ public enum MetadataReadProbe {
     private static func statfsCase(directory: String, documents: String) -> Experiment {
         guard symbolsAvailable else {
             return unavailable("statfs-\(directory)", "statfs64(path, &buf)", directory)
+        }
+        if !pathExists(directory) {
+            return missingPath("statfs-\(directory)", "statfs64(path, &buf)", directory)
         }
         let controlRC = callStatfs(documents)
         let control = classify(controlRC)
@@ -589,6 +617,34 @@ public enum MetadataReadProbe {
                 interpretation: deniedMeaning
             )
         }
+    }
+
+    /// The path does not exist on this platform, so the experiment cannot run.
+    ///
+    /// This is deliberately NOT an "absent" answer. An absent answer means the
+    /// path was resolved and the requested item was not found, which on a
+    /// protected path is evidence the authorization check did not run. A path
+    /// that does not exist at all is a different thing entirely, and treating
+    /// the two alike is exactly how a platform artifact becomes a false finding.
+    private static func missingPath(
+        _ id: String, _ operation: String, _ path: String
+    ) -> Experiment {
+        Experiment(
+            id: id,
+            mechanism: """
+                A read primitive that does not open the file. The target path does                 not exist on this platform, so the experiment was not run.
+                """,
+            operation: operation,
+            arguments: path,
+            expected: "Denied with EPERM on a protected path.",
+            expectedDenied: true,
+            outcome: .notAttempted,
+            errnoName: nil, errnoNumber: nil, reportedBytes: nil,
+            observed: "the path does not exist here",
+            interpretation: """
+                NOT ATTEMPTED: this path is an iOS location and does not exist on                 this platform. An ENOENT here would say nothing about the sandbox,                 so the experiment is withheld rather than reported as an absence                 finding.
+                """
+        )
     }
 
     private static func unavailable(
