@@ -53,6 +53,8 @@ public struct MatrixRunner: Sendable {
         var containerWrite: ContainerWriteProbe.Result?
         var inodeOpen: InodeOpenProbe.Result?
         var clone: CloneProbe.Result?
+        var xpcServices: [XPCProbe.ServiceProbe]?
+        var fileCoordinator: XPCProbe.CoordinatorResult?
         if runBoundaryExperiments {
             // The container is the app's own home; every experiment is scoped to
             // it and to paths it cannot reach.
@@ -67,6 +69,17 @@ public struct MatrixRunner: Sendable {
             containerWrite = ContainerWriteProbe.probe(containerPath: container)
             inodeOpen = InodeOpenProbe.probe(paths: InodeOpenProbe.defaultTargets())
             clone = CloneProbe.run(containerPath: container)
+
+            // Service-mediated authorization: which XPC services this process can
+            // reach, and whether NSFileCoordinator performs unauthorized work on
+            // the caller's behalf.
+            xpcServices = XPCProbe.xpcAvailable
+                ? XPCProbe.probeServices(timeout: 3.0)
+                : nil
+            fileCoordinator = XPCProbe.probeFileCoordinator(
+                containerPath: container,
+                outsideDirectory: "/var/mobile/Library"
+            )
         }
 
         return CapabilityMatrix(
@@ -77,7 +90,9 @@ public struct MatrixRunner: Sendable {
             sandboxProfile: profile,
             containerWrite: containerWrite,
             inodeOpen: inodeOpen,
-            clone: clone
+            clone: clone,
+            xpcServices: xpcServices,
+            fileCoordinator: fileCoordinator
         )
     }
 }

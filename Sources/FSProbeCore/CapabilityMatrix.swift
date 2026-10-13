@@ -37,6 +37,11 @@ public struct CapabilityMatrix: Sendable {
     /// Results of the APFS-clone boundary experiments.
     public let clone: CloneProbe.Result?
 
+    /// Reachability of candidate XPC services from this process.
+    public let xpcServices: [XPCProbe.ServiceProbe]?
+    /// NSFileCoordinator tested as a confused deputy.
+    public let fileCoordinator: XPCProbe.CoordinatorResult?
+
     /// Results of testing whether a user-granted scope is confined to what the
     /// user picked. Nil until the user grants access.
     public let securityScope: SecurityScopeProbe.Result?
@@ -53,7 +58,9 @@ public struct CapabilityMatrix: Sendable {
         inodeOpen: InodeOpenProbe.Result? = nil,
         securityScope: SecurityScopeProbe.Result? = nil,
         securityScopeAfterRelease: SecurityScopeProbe.Result? = nil,
-        clone: CloneProbe.Result? = nil
+        clone: CloneProbe.Result? = nil,
+        xpcServices: [XPCProbe.ServiceProbe]? = nil,
+        fileCoordinator: XPCProbe.CoordinatorResult? = nil
     ) {
         self.results = results
         self.environment = environment
@@ -65,6 +72,8 @@ public struct CapabilityMatrix: Sendable {
         self.securityScope = securityScope
         self.securityScopeAfterRelease = securityScopeAfterRelease
         self.clone = clone
+        self.xpcServices = xpcServices
+        self.fileCoordinator = fileCoordinator
     }
 
     /// Platform context captured at run time.

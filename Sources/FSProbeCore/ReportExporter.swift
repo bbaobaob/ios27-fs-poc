@@ -142,6 +142,45 @@ public enum ReportExporter {
             }
         }
 
+        if let services = matrix.xpcServices {
+            lines.append("")
+            lines.append("XPC service reachability (mach-lookup from a sandboxed app):")
+            for service in services {
+                let timing = service.responseMilliseconds.map { " (\($0) ms)" } ?? ""
+                lines.append("  [\(service.reachability.rawValue)] \(service.serviceName)\(timing)")
+                if let reason = service.refusalReason {
+                    lines.append("      reason: \(reason)")
+                }
+            }
+            // Compared by raw value: the Darwin build has reachable/refused, the
+            // non-Darwin build only has unavailable.
+            let responded = services.filter {
+                $0.reachability.rawValue == "reachable"
+                    || $0.reachability.rawValue == "refused"
+            }.count
+            lines.append("  \(responded) of \(services.count) responded within the timeout; "
+                + "reachability is reconnaissance, not a finding")
+        }
+
+        if let coordinator = matrix.fileCoordinator {
+            lines.append("")
+            lines.append("NSFileCoordinator as a confused deputy:")
+            for experiment in coordinator.experiments {
+                let flag = experiment.isBoundaryViolation ? "  <-- BOUNDARY VIOLATION" : ""
+                lines.append("  [\(experiment.outcome.rawValue)] \(experiment.id)\(flag)")
+                lines.append("      \(experiment.operation)  args: \(experiment.arguments)")
+                if let domain = experiment.errorDomain {
+                    lines.append("      error: \(domain) \(experiment.errorCode ?? 0)")
+                }
+                lines.append("      result: \(experiment.interpretation)")
+            }
+            if !coordinator.violations.isEmpty {
+                lines.append("  VIOLATIONS: \(coordinator.violations.map { $0.id }.joined(separator: ", "))")
+            } else {
+                lines.append("  no coordination succeeded where the policy predicts refusal")
+            }
+        }
+
         if let io = matrix.inodeOpen {
             lines.append("")
             lines.append("Open-by-inode (openbyid_np: no path traversal at all):")
@@ -251,10 +290,12 @@ public enum ReportExporter {
         let inodeOpen: InodeOpenProbe.Result?
         let securityScope: SecurityScopeProbe.Result?
         let clone: CloneProbe.Result?
+        let xpcServices: [XPCProbe.ServiceProbe]?
+        let fileCoordinator: XPCProbe.CoordinatorResult?
         let securityScopeAfterRelease: SecurityScopeProbe.Result?
 
         init(matrix: CapabilityMatrix) {
-            self.schema = "fsprobe.capability-matrix.v7"
+            self.schema = "fsprobe.capability-matrix.v8"
             self.environment = matrix.environment
             self.results = matrix.results
             self.ancestors = matrix.ancestors
@@ -265,6 +306,8 @@ public enum ReportExporter {
             self.securityScope = matrix.securityScope
             self.securityScopeAfterRelease = matrix.securityScopeAfterRelease
             self.clone = matrix.clone
+            self.xpcServices = matrix.xpcServices
+            self.fileCoordinator = matrix.fileCoordinator
         }
     }
 }
