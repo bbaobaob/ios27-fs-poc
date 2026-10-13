@@ -63,6 +63,7 @@ public struct MatrixRunner: Sendable {
         var descriptorPrimitives: DescriptorPrimitiveProbe.Result?
         var foundationSurface: FoundationSurfaceProbe.Result?
         var alternateLookups: AlternateLookupProbe.Result?
+        var remainingPrimitives: RemainingPrimitivesProbe.Result?
         if runBoundaryExperiments {
             // The container is the app's own home; every experiment is scoped to
             // it and to paths it cannot reach.
@@ -137,6 +138,10 @@ public struct MatrixRunner: Sendable {
             // If the mach-lookup gate depends on which API asks, a service XPC
             // refused may be resolvable here.
             alternateLookups = AlternateLookupProbe.probe()
+
+            // Primitives never tried before, each a separate authorization
+            // predicate: the mount table, a host port, kernel MIBs, and copyfile.
+            remainingPrimitives = RemainingPrimitivesProbe.probe(containerPath: container)
         }
 
         return CapabilityMatrix(
@@ -157,7 +162,8 @@ public struct MatrixRunner: Sendable {
             metadataReads: metadataReads,
             descriptorPrimitives: descriptorPrimitives,
             foundationSurface: foundationSurface,
-            alternateLookups: alternateLookups
+            alternateLookups: alternateLookups,
+            remainingPrimitives: remainingPrimitives
         )
     }
 }

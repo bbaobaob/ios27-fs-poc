@@ -421,6 +421,27 @@ public enum ReportExporter {
             }
         }
 
+        if let remaining = matrix.remainingPrimitives {
+            lines.append("")
+            lines.append("Primitives never tried before:")
+            for item in remaining.cases {
+                let flag = item.isBoundaryViolation ? "  <-- BOUNDARY VIOLATION" : ""
+                lines.append("  [\(item.outcome.rawValue)] \(item.id)\(flag)")
+                lines.append("      \(item.operation)  args: \(item.arguments)")
+                if let rv = item.returnValue { lines.append("      return: \(rv)") }
+                if let err = item.errorName { lines.append("      error: \(err)") }
+                lines.append("      observed: \(item.observed ?? "no answer")")
+                lines.append("      result: \(item.interpretation)")
+            }
+            if !remaining.violations.isEmpty {
+                lines.append("  VIOLATIONS: \(remaining.violations.map { $0.id }.joined(separator: ", "))")
+            } else if remaining.cases.isEmpty {
+                lines.append("  NOT_ATTEMPTED: no remaining-primitive case ran.")
+            } else {
+                lines.append("  no remaining primitive answered where the policy predicts refusal")
+            }
+        }
+
         if let io = matrix.inodeOpen {
             lines.append("")
             lines.append("Open-by-inode (openbyid_np: no path traversal at all):")
@@ -541,6 +562,7 @@ public enum ReportExporter {
         let descriptorPrimitives: DescriptorPrimitiveProbe.Result?
         let foundationSurface: FoundationSurfaceProbe.Result?
         let alternateLookups: AlternateLookupProbe.Result?
+        let remainingPrimitives: RemainingPrimitivesProbe.Result?
 
         init(matrix: CapabilityMatrix) {
             self.schema = "fsprobe.capability-matrix.v9"
@@ -564,6 +586,7 @@ public enum ReportExporter {
             self.descriptorPrimitives = matrix.descriptorPrimitives
             self.foundationSurface = matrix.foundationSurface
             self.alternateLookups = matrix.alternateLookups
+            self.remainingPrimitives = matrix.remainingPrimitives
         }
     }
 }

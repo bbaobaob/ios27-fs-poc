@@ -59,6 +59,8 @@ public struct CapabilityMatrix: Sendable {
     public let foundationSurface: FoundationSurfaceProbe.Result?
     /// Reaching a mach service by a path other than the XPC connection factory.
     public let alternateLookups: AlternateLookupProbe.Result?
+    /// Primitives never tried before: mount table, host port, kernel MIBs, copyfile.
+    public let remainingPrimitives: RemainingPrimitivesProbe.Result?
 
     /// Results of testing whether a user-granted scope is confined to what the
     /// user picked. Nil until the user grants access.
@@ -86,7 +88,8 @@ public struct CapabilityMatrix: Sendable {
         metadataReads: MetadataReadProbe.Result? = nil,
         descriptorPrimitives: DescriptorPrimitiveProbe.Result? = nil,
         foundationSurface: FoundationSurfaceProbe.Result? = nil,
-        alternateLookups: AlternateLookupProbe.Result? = nil
+        alternateLookups: AlternateLookupProbe.Result? = nil,
+        remainingPrimitives: RemainingPrimitivesProbe.Result? = nil
     ) {
         self.results = results
         self.environment = environment
@@ -108,6 +111,7 @@ public struct CapabilityMatrix: Sendable {
         self.descriptorPrimitives = descriptorPrimitives
         self.foundationSurface = foundationSurface
         self.alternateLookups = alternateLookups
+        self.remainingPrimitives = remainingPrimitives
     }
 
     /// Platform context captured at run time.
