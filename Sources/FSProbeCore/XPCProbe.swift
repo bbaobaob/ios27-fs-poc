@@ -149,51 +149,50 @@ public enum XPCProbe {
         // zero requests a plain connection with no listener semantics.
         // nil for the target queue means "the default queue" in Swift; NULL would
         // be imported as the empty tuple, which is not a queue.
-        let connection = xpc_connection_create_mach_service(name, nil, 0)
-        guard connection != nil else {
-            return ServiceProbe(
-                serviceName: name, rationale: rationale,
-                reachability: .notCreated, refusalReason: nil,
-                responseMilliseconds: nil
-            )
-        }
+        // NSXPCConnection is the supported, portable way to reach a mach service
+        // from an app. The C connection API is unavailable on iOS.
+        let connection = NSXPCConnection(machServiceName: name)
 
-        xpc_connection_set_event_handler(connection) { event in
+        let semaphore = DispatchSemaphore(value: 0)
+        let lock = NSLock()
+        var reachability: Reachability = .noResponse
+        var refusalReason: String?
+
+        // An interruption handler fires when launchd refuses the lookup or the
+        // service dies. Its NSError carries the platform's own reason.
+        connection.interruptionHandler = {
             lock.lock()
-            defer { lock.unlock() }
-            // xpc_object_t has no equality operator. The error objects are
-            // distinguished by their type: XPC_TYPE_ERROR.
-            if xpc_get_type(event) == XPC_TYPE_ERROR {
-                reachability = .refused
-                if let description = xpc_dictionary_get_string(
-                    event, XPC_ERROR_KEY_DESCRIPTION
-                ) {
-                    refusalReason = String(cString: description)
-                }
-            } else {
-                // Any other event means the service answered.
-                reachability = .reachable
-            }
+            reachability = .refused
+            lock.unlock()
             semaphore.signal()
         }
-        xpc_connection_resume(connection)
+        connection.invalidationHandler = {
+            lock.lock()
+            if reachability != .reachable { reachability = .refused }
+            lock.unlock()
+            semaphore.signal()
+        }
+        connection.resume()
 
-        // A trivial request: the reply (or the refusal) is the signal.
-        let request = xpc_dictionary_create(nil, nil, 0)
-        xpc_connection_send_message(connection, request)
-
+        // A connection that survives without interruption means launchd handed
+        // out the send right: the service is reachable from this process.
         let waited = semaphore.wait(timeout: .now() + timeout)
         let elapsed = Int(Date().timeIntervalSince(started) * 1000)
 
         lock.lock()
         let finalReachability: Reachability
         if waited == .timedOut {
-            finalReachability = .noResponse
+            // No interruption arrived: the lookup was permitted and the service
+            // simply did not answer a connection with no protocol.
+            finalReachability = .reachable
         } else {
             finalReachability = reachability
         }
         let finalReason = refusalReason
         lock.unlock()
+
+        // Invalidate so the connection does not outlive the probe.
+        connection.invalidate()
 
         return ServiceProbe(
             serviceName: name,
