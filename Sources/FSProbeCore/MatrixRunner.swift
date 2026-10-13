@@ -55,6 +55,8 @@ public struct MatrixRunner: Sendable {
         var clone: CloneProbe.Result?
         var xpcServices: [XPCProbe.ServiceProbe]?
         var fileCoordinator: XPCProbe.CoordinatorResult?
+        var machServices: [CrossProcessProbe.MachServiceProbe]?
+        var processIntrospection: CrossProcessProbe.IntrospectionReport?
         if runBoundaryExperiments {
             // The container is the app's own home; every experiment is scoped to
             // it and to paths it cannot reach.
@@ -84,6 +86,22 @@ public struct MatrixRunner: Sendable {
                 containerPath: container,
                 outsideDirectory: "/var/mobile/Library"
             )
+
+            // The mach-lookup experiment resolves the connection factory at
+            // runtime instead of linking it, because the SDK marks it
+            // unavailable. Whether the symbol is present, and whether the
+            // operating system then permits the lookup, is measured here rather
+            // than inferred from header availability.
+            //
+            // The negative control is the first candidate by design, so a real
+            // answer can be told apart from the platform's "not found".
+            machServices = CrossProcessProbe.machReachabilityAvailable
+                ? CrossProcessProbe.probeMachServices(timeout: 3.0)
+                : nil
+
+            // Cross-process introspection. The self-targeting control runs
+            // first and gates the interpretation of every other attempt.
+            processIntrospection = CrossProcessProbe.probeProcessIntrospection()
         }
 
         return CapabilityMatrix(
@@ -96,7 +114,9 @@ public struct MatrixRunner: Sendable {
             inodeOpen: inodeOpen,
             clone: clone,
             xpcServices: xpcServices,
-            fileCoordinator: fileCoordinator
+            fileCoordinator: fileCoordinator,
+            machServices: machServices,
+            processIntrospection: processIntrospection
         )
     }
 }

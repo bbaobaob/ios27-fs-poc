@@ -226,6 +226,67 @@ public enum ReportExporter {
             }
         }
 
+        // Mach-lookup reachability. This is the experiment that converts the
+        // earlier "an app cannot open a mach service by name" claim from an SDK
+        // inference into a measurement, by resolving the connection factory at
+        // runtime and then actually attempting each lookup.
+        if let machServices = matrix.machServices {
+            lines.append("")
+            lines.append("Mach service reachability (connection factory resolved at runtime):")
+            let resolved = machServices.filter { $0.symbolResolved }.count
+            lines.append("  connection factory resolved in \(resolved) of \(machServices.count) attempts"
+                + " (symbol presence is not a permission)")
+            // The negative control calibrates what a refusal looks like, so it is
+            // called out explicitly rather than buried in the list.
+            if let control = machServices.first(where: { $0.serviceName.contains("nonexistent") }) {
+                lines.append("  negative control (\(control.serviceName)): \(control.reachability.rawValue)")
+                if let reason = control.refusalReason {
+                    lines.append("      \(reason)")
+                }
+            }
+            for service in machServices where !service.serviceName.contains("nonexistent") {
+                let timing = service.responseMilliseconds.map { " \($0)ms" } ?? ""
+                lines.append("  [\(service.reachability.rawValue)] \(service.serviceName)\(timing)")
+                if let reason = service.refusalReason {
+                    lines.append("      \(reason)")
+                }
+            }
+            let answered = machServices.filter { $0.reachability == .reachable }.count
+            lines.append("  \(answered) candidate(s) answered a connection carrying no protocol")
+            lines.append("  note: reachability is reconnaissance, not a finding. A finding")
+            lines.append("        requires an effect the caller was not authorized to produce.")
+        }
+
+        if let introspection = matrix.processIntrospection {
+            lines.append("")
+            lines.append("Cross-process introspection:")
+            if introspection.attempts.isEmpty {
+                lines.append("  NOT_ATTEMPTED: the process introspection APIs are not present"
+                    + " on this platform, so no attempt was made.")
+            } else {
+                let controlNote = introspection.controlSucceeded
+                    ? "the self-targeting control succeeded, so the results below are interpretable"
+                    : "the self-targeting control FAILED, so every result below is INCONCLUSIVE:"
+                        + " a refusal here means the API is unusable, not that the policy denies it"
+                lines.append("  \(controlNote)")
+                for attempt in introspection.attempts {
+                    let marker = attempt.isControl ? " [control]" : ""
+                    lines.append("  [\(attempt.outcome.rawValue)] \(attempt.operation) -> \(attempt.target)\(marker)")
+                    if let rv = attempt.returnValue { lines.append("      return: \(rv)") }
+                    if let err = attempt.errorName { lines.append("      error: \(err)") }
+                    if let observed = attempt.observed { lines.append("      observed: \(observed)") }
+                    lines.append("      result: \(attempt.interpretation)")
+                }
+                if !introspection.violations.isEmpty {
+                    lines.append("  VIOLATIONS: \(introspection.violations.map { $0.id }.joined(separator: ", "))")
+                } else if introspection.controlSucceeded {
+                    lines.append("  no cross-process operation succeeded where the policy predicts refusal")
+                } else {
+                    lines.append("  INCONCLUSIVE: the control did not succeed, so no denial can be claimed")
+                }
+            }
+        }
+
         if let io = matrix.inodeOpen {
             lines.append("")
             lines.append("Open-by-inode (openbyid_np: no path traversal at all):")
@@ -338,6 +399,8 @@ public enum ReportExporter {
         let xpcServices: [XPCProbe.ServiceProbe]?
         let fileCoordinator: XPCProbe.CoordinatorResult?
         let securityScopeAfterRelease: SecurityScopeProbe.Result?
+        let machServices: [CrossProcessProbe.MachServiceProbe]?
+        let processIntrospection: CrossProcessProbe.IntrospectionReport?
 
         init(matrix: CapabilityMatrix) {
             self.schema = "fsprobe.capability-matrix.v9"
@@ -353,6 +416,8 @@ public enum ReportExporter {
             self.clone = matrix.clone
             self.xpcServices = matrix.xpcServices
             self.fileCoordinator = matrix.fileCoordinator
+            self.machServices = matrix.machServices
+            self.processIntrospection = matrix.processIntrospection
         }
     }
 }

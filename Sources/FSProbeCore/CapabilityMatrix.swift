@@ -42,6 +42,12 @@ public struct CapabilityMatrix: Sendable {
     /// NSFileCoordinator tested as a confused deputy.
     public let fileCoordinator: XPCProbe.CoordinatorResult?
 
+    /// Reachability of candidate mach services, resolved at runtime rather than
+    /// linked, so that SDK unavailability is not mistaken for runtime absence.
+    public let machServices: [CrossProcessProbe.MachServiceProbe]?
+    /// Whether an ordinary app can observe or control another process.
+    public let processIntrospection: CrossProcessProbe.IntrospectionReport?
+
     /// Results of testing whether a user-granted scope is confined to what the
     /// user picked. Nil until the user grants access.
     public let securityScope: SecurityScopeProbe.Result?
@@ -60,7 +66,9 @@ public struct CapabilityMatrix: Sendable {
         securityScopeAfterRelease: SecurityScopeProbe.Result? = nil,
         clone: CloneProbe.Result? = nil,
         xpcServices: [XPCProbe.ServiceProbe]? = nil,
-        fileCoordinator: XPCProbe.CoordinatorResult? = nil
+        fileCoordinator: XPCProbe.CoordinatorResult? = nil,
+        machServices: [CrossProcessProbe.MachServiceProbe]? = nil,
+        processIntrospection: CrossProcessProbe.IntrospectionReport? = nil
     ) {
         self.results = results
         self.environment = environment
@@ -74,6 +82,8 @@ public struct CapabilityMatrix: Sendable {
         self.clone = clone
         self.xpcServices = xpcServices
         self.fileCoordinator = fileCoordinator
+        self.machServices = machServices
+        self.processIntrospection = processIntrospection
     }
 
     /// Platform context captured at run time.
