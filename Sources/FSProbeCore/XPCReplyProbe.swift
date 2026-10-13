@@ -311,9 +311,18 @@ public enum XPCReplyProbe {
         return unsafeBitCast(sym, to: CreateMachServiceFn.self)
     }
 
+    // Bound by name with the full signature, because the imported
+    // xpc_dictionary_get_string takes position and options arguments that the
+    // two-argument call site does not supply.
+    @_silgen_name("xpc_dictionary_get_string")
+    private static func errorDescriptionString(
+        _ dictionary: xpc_object_t, _ key: UnsafePointer<CChar>,
+        _ position: Int, _ options: UInt32
+    ) -> UnsafePointer<CChar>?
+
     private static func xpcDescription(_ object: xpc_object_t) -> String? {
         let structured = "XPCErrorDescription".withCString { key in
-            xpc_dictionary_get_string(object, key).map { String(cString: $0) }
+            errorDescriptionString(object, key, 0, 0).map { String(cString: $0) }
         }
         if let structured, !structured.isEmpty { return structured }
         let ptr = xpc_copy_description(object)
