@@ -29,7 +29,7 @@ import Foundation
 #if canImport(Darwin)
 import Darwin
 /// The Mach port type, spelled portably so this file compiles everywhere.
-public typealias MachPort = MachPort
+public typealias MachPort = mach_port_t
 #else
 /// A stand-in for the verification host, where Mach does not exist.
 public typealias MachPort = UInt32
@@ -78,11 +78,28 @@ public enum MachShim {
     }
 
     /// `task_get_bootstrap_port(task, &port)`.
+    ///
+    /// Bound by name because these two live in libSystem's bootstrap.h rather
+    /// than in the Darwin module, so they are not visible to a plain import.
+    /// They are bound HERE, once, which is the entire purpose of this file.
+    #if canImport(Darwin)
+    @_silgen_name("task_get_bootstrap_port")
+    private static func cTaskGetBootstrapPort(
+        _ task: MachPort, _ port: UnsafeMutablePointer<MachPort>
+    ) -> Int32
+
+    @_silgen_name("bootstrap_look_up")
+    private static func cBootstrapLookUp(
+        _ bp: MachPort, _ name: UnsafePointer<CChar>,
+        _ sp: UnsafeMutablePointer<MachPort>
+    ) -> Int32
+    #endif
+
     public static func taskGetBootstrapPort(
         _ task: MachPort, _ port: UnsafeMutablePointer<MachPort>
     ) -> Int32 {
         #if canImport(Darwin)
-        return task_get_bootstrap_port(task, port)
+        return cTaskGetBootstrapPort(task, port)
         #else
         return -1
         #endif
@@ -95,7 +112,7 @@ public enum MachShim {
         _ servicePort: UnsafeMutablePointer<MachPort>
     ) -> Int32 {
         #if canImport(Darwin)
-        return bootstrap_look_up(bootstrapPort, serviceName, servicePort)
+        return cBootstrapLookUp(bootstrapPort, serviceName, servicePort)
         #else
         return -1
         #endif
