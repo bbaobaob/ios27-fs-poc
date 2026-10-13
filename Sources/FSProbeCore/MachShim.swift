@@ -77,32 +77,48 @@ public enum MachShim {
         #endif
     }
 
-    /// `task_get_bootstrap_port(task, &port)`.
+    /// `task_get_bootstrap_port(task, &port)` and `bootstrap_look_up(bp, name, &sp)`.
     ///
-    /// Bound by name because these two live in libSystem's bootstrap.h rather
-    /// than in the Darwin module, so they are not visible to a plain import.
-    /// They are bound HERE, once, which is the entire purpose of this file.
-    #if canImport(Darwin)
-    @_silgen_name("task_get_bootstrap_port")
-    private static func cTaskGetBootstrapPort(
-        _ task: MachPort, _ port: UnsafeMutablePointer<MachPort>
+    /// These are resolved at runtime rather than linked. The link failed on macOS
+    /// with "Undefined symbols for architecture arm64: _task_get_bootstrap_port":
+    /// the symbol is not present in the macOS libSystem that the runner links
+    /// against, and binding it by name therefore breaks the build on a platform
+    /// where the experiment cannot run anyway.
+    ///
+    /// Resolving at runtime is the honest answer here, and it matches what the
+    /// clonefile and openbyid_np experiments already do for the same reason: the
+    /// symbol is an iOS research target, its presence is itself a fact worth
+    /// recording, and a platform without it must report the experiment as
+    /// unattempted rather than failing to build.
+    private typealias TaskGetBootstrapPortFn = @convention(c) (
+        MachPort, UnsafeMutablePointer<MachPort>
     ) -> Int32
 
-    @_silgen_name("bootstrap_look_up")
-    private static func cBootstrapLookUp(
-        _ bp: MachPort, _ name: UnsafePointer<CChar>,
-        _ sp: UnsafeMutablePointer<MachPort>
+    private typealias BootstrapLookUpFn = @convention(c) (
+        MachPort, UnsafePointer<CChar>, UnsafeMutablePointer<MachPort>
     ) -> Int32
-    #endif
+
+    private static var taskGetBootstrapPortFn: TaskGetBootstrapPortFn? {
+        guard let sym = POSIXShim.lookupSymbol("task_get_bootstrap_port") else { return nil }
+        return unsafeBitCast(sym, to: TaskGetBootstrapPortFn.self)
+    }
+
+    private static var bootstrapLookUpFn: BootstrapLookUpFn? {
+        guard let sym = POSIXShim.lookupSymbol("bootstrap_look_up") else { return nil }
+        return unsafeBitCast(sym, to: BootstrapLookUpFn.self)
+    }
+
+    /// True when both bootstrap symbols resolved, which is what makes the
+    /// alternate-lookup experiment runnable at all.
+    public static var bootstrapAPIAvailable: Bool {
+        taskGetBootstrapPortFn != nil && bootstrapLookUpFn != nil
+    }
 
     public static func taskGetBootstrapPort(
         _ task: MachPort, _ port: UnsafeMutablePointer<MachPort>
     ) -> Int32 {
-        #if canImport(Darwin)
-        return cTaskGetBootstrapPort(task, port)
-        #else
-        return -1
-        #endif
+        guard let fn = taskGetBootstrapPortFn else { return -1 }
+        return fn(task, port)
     }
 
     /// `bootstrap_look_up(bp, name, &sp)`.
@@ -111,11 +127,8 @@ public enum MachShim {
         _ serviceName: UnsafePointer<CChar>,
         _ servicePort: UnsafeMutablePointer<MachPort>
     ) -> Int32 {
-        #if canImport(Darwin)
-        return cBootstrapLookUp(bootstrapPort, serviceName, servicePort)
-        #else
-        return -1
-        #endif
+        guard let fn = bootstrapLookUpFn else { return -1 }
+        return fn(bootstrapPort, serviceName, servicePort)
     }
 
     /// `task_for_pid(target, pid, &task)`.

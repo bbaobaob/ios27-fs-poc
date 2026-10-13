@@ -161,8 +161,31 @@ public enum AlternateLookupProbe {
     #endif
 
     public static func probe() -> Result {
+        // The bootstrap symbols are iOS research targets. On a platform without
+        // them the experiment is unattempted, not failed -- and that is a fact
+        // worth recording rather than hiding behind a build that would not link.
+        guard MachShim.bootstrapAPIAvailable else {
+            return Result(
+                lookups: serviceList.map { entry in
+                    Lookup(
+                        serviceName: entry.name, rationale: entry.rationale,
+                        xpcOutcome: entry.xpc, outcome: .notAttempted,
+                        returnValue: nil, errorName: nil,
+                        interpretation: """
+                            NOT ATTEMPTED: task_get_bootstrap_port and/or \
+                            bootstrap_look_up are not present on this platform, so no \
+                            lookup was made. This is a statement about the platform, \
+                            not a denial.
+                            """
+                    )
+                },
+                violations: [],
+                bootstrapPortAvailable: false
+            )
+        }
+
         #if canImport(Darwin)
-        var bootstrapPort: mach_port_t = 0
+        var bootstrapPort: MachPort = 0
         let kr = MachShim.taskGetBootstrapPort(MachShim.taskSelf, &bootstrapPort)
         guard kr == 0, bootstrapPort != 0 else {
             // Without a bootstrap port nothing can be looked up, and every result
