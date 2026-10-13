@@ -144,9 +144,10 @@ public enum XPCProbe {
         var reachability: Reachability = .noResponse
         var refusalReason: String?
 
-        let connection = xpc_connection_create_mach_service(
-            name, NULL, XPC_CONNECTION_MACH_SERVICE_LISTENER
-        )
+        // Signature: xpc_connection_create_mach_service(name, target_queue, flags).
+        // NULL means the default queue. The flags argument is a UInt64 bitfield;
+        // zero requests a plain connection with no listener semantics.
+        let connection = xpc_connection_create_mach_service(name, NULL, 0)
         guard connection != nil else {
             return ServiceProbe(
                 serviceName: name, rationale: rationale,
@@ -158,8 +159,9 @@ public enum XPCProbe {
         xpc_connection_set_event_handler(connection) { event in
             lock.lock()
             defer { lock.unlock() }
-            if event == XPC_ERROR_CONNECTION_INTERRUPTED
-                || event == XPC_ERROR_CONNECTION_INVALID {
+            // xpc_object_t has no equality operator. The error objects are
+            // distinguished by their type: XPC_TYPE_ERROR.
+            if xpc_get_type(event) == XPC_TYPE_ERROR {
                 reachability = .refused
                 if let description = xpc_dictionary_get_string(
                     event, XPC_ERROR_KEY_DESCRIPTION
