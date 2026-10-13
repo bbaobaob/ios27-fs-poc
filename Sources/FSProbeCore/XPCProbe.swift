@@ -147,7 +147,9 @@ public enum XPCProbe {
         // Signature: xpc_connection_create_mach_service(name, target_queue, flags).
         // NULL means the default queue. The flags argument is a UInt64 bitfield;
         // zero requests a plain connection with no listener semantics.
-        let connection = xpc_connection_create_mach_service(name, NULL, 0)
+        // nil for the target queue means "the default queue" in Swift; NULL would
+        // be imported as the empty tuple, which is not a queue.
+        let connection = xpc_connection_create_mach_service(name, nil, 0)
         guard connection != nil else {
             return ServiceProbe(
                 serviceName: name, rationale: rationale,
@@ -351,7 +353,7 @@ public enum XPCProbe {
                 """,
                 expectedDenied: false
             ))
-            try? FileManager.default.removeItem(atPath: controlURL)
+            try? FileManager.default.removeItem(atPath: controlURL.path)
         } else {
             experiments.append(Experiment(
                 id: "coordinator-control",
