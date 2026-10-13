@@ -61,6 +61,7 @@ public struct MatrixRunner: Sendable {
         var operationClasses: FileOperationClassProbe.Result?
         var metadataReads: MetadataReadProbe.Result?
         var descriptorPrimitives: DescriptorPrimitiveProbe.Result?
+        var foundationSurface: FoundationSurfaceProbe.Result?
         if runBoundaryExperiments {
             // The container is the app's own home; every experiment is scoped to
             // it and to paths it cannot reach.
@@ -125,6 +126,11 @@ public struct MatrixRunner: Sendable {
             // a protected object and then operating through it is a separate
             // authorization question from every path-based experiment so far.
             descriptorPrimitives = DescriptorPrimitiveProbe.probe(containerPath: container)
+
+            // The same boundary through Foundation and CoreFoundation instead of
+            // libc. Includes access(), never tested directly, and the one public
+            // API that reaches containermanagerd.
+            foundationSurface = FoundationSurfaceProbe.probe(containerPath: container)
         }
 
         return CapabilityMatrix(
@@ -143,7 +149,8 @@ public struct MatrixRunner: Sendable {
             preferenceDeputy: preferenceDeputy,
             operationClasses: operationClasses,
             metadataReads: metadataReads,
-            descriptorPrimitives: descriptorPrimitives
+            descriptorPrimitives: descriptorPrimitives,
+            foundationSurface: foundationSurface
         )
     }
 }

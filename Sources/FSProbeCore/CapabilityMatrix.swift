@@ -55,6 +55,8 @@ public struct CapabilityMatrix: Sendable {
     public let metadataReads: MetadataReadProbe.Result?
     /// Primitives reachable through a descriptor rather than a path.
     public let descriptorPrimitives: DescriptorPrimitiveProbe.Result?
+    /// The same boundary reached through Foundation rather than libc.
+    public let foundationSurface: FoundationSurfaceProbe.Result?
 
     /// Results of testing whether a user-granted scope is confined to what the
     /// user picked. Nil until the user grants access.
@@ -80,7 +82,8 @@ public struct CapabilityMatrix: Sendable {
         preferenceDeputy: PreferenceDeputyProbe.Result? = nil,
         operationClasses: FileOperationClassProbe.Result? = nil,
         metadataReads: MetadataReadProbe.Result? = nil,
-        descriptorPrimitives: DescriptorPrimitiveProbe.Result? = nil
+        descriptorPrimitives: DescriptorPrimitiveProbe.Result? = nil,
+        foundationSurface: FoundationSurfaceProbe.Result? = nil
     ) {
         self.results = results
         self.environment = environment
@@ -100,6 +103,7 @@ public struct CapabilityMatrix: Sendable {
         self.operationClasses = operationClasses
         self.metadataReads = metadataReads
         self.descriptorPrimitives = descriptorPrimitives
+        self.foundationSurface = foundationSurface
     }
 
     /// Platform context captured at run time.

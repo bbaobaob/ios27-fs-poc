@@ -378,6 +378,28 @@ public enum ReportExporter {
             }
         }
 
+        if let surface = matrix.foundationSurface {
+            lines.append("")
+            lines.append("The same boundary through Foundation rather than libc:")
+            for item in surface.cases {
+                let flag = item.isBoundaryViolation ? "  <-- BOUNDARY VIOLATION" : ""
+                lines.append("  [\(item.outcome.rawValue)] \(item.id)\(flag)")
+                lines.append("      \(item.operation)  args: \(item.arguments)")
+                if let errno = item.errnoName {
+                    lines.append("      errno: \(errno)")
+                }
+                lines.append("      observed: \(item.observed ?? "no answer")")
+                lines.append("      result: \(item.interpretation)")
+            }
+            if !surface.violations.isEmpty {
+                lines.append("  VIOLATIONS: \(surface.violations.map { $0.id }.joined(separator: ", "))")
+            } else if surface.cases.isEmpty {
+                lines.append("  NOT_ATTEMPTED: no Foundation-surface case ran.")
+            } else {
+                lines.append("  no Foundation API reported access the direct calls refused")
+            }
+        }
+
         if let io = matrix.inodeOpen {
             lines.append("")
             lines.append("Open-by-inode (openbyid_np: no path traversal at all):")
@@ -496,6 +518,7 @@ public enum ReportExporter {
         let operationClasses: FileOperationClassProbe.Result?
         let metadataReads: MetadataReadProbe.Result?
         let descriptorPrimitives: DescriptorPrimitiveProbe.Result?
+        let foundationSurface: FoundationSurfaceProbe.Result?
 
         init(matrix: CapabilityMatrix) {
             self.schema = "fsprobe.capability-matrix.v9"
@@ -517,6 +540,7 @@ public enum ReportExporter {
             self.operationClasses = matrix.operationClasses
             self.metadataReads = matrix.metadataReads
             self.descriptorPrimitives = matrix.descriptorPrimitives
+            self.foundationSurface = matrix.foundationSurface
         }
     }
 }
