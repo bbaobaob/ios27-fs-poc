@@ -246,11 +246,31 @@ public enum CrossProcessProbe {
         )
     }
 
-    /// Render any xpc object as a string, for the platform's own error text.
+    @_silgen_name("xpc_dictionary_get_string")
+    private static func errorDescriptionString(
+        _ dictionary: xpc_object_t, _ key: UnsafePointer<CChar>
+    ) -> UnsafePointer<CChar>?
+
+    /// The key under which XPC stores an error's human-readable description.
     ///
-    /// `xpc_copy_description` returns a non-optional malloc'd buffer: it always
-    /// produces a description, so there is nothing to guard against.
+    /// The literal was confirmed empirically rather than guessed: rendering a
+    /// refused connection with `xpc_copy_description` showed the error
+    /// dictionary's key as "XPCErrorDescription". The macro is not referenced by
+    /// name because it is a preprocessor definition rather than an exported
+    /// symbol, and the surrounding connection API is SDK-unavailable.
+    private static let xpcErrorDescriptionKey = "XPCErrorDescription"
+
+    /// The platform's own one-line reason for a refused connection.
+    ///
+    /// The structured description is preferred: the full `xpc_copy_description`
+    /// dump is five lines of dictionary rendering per refusal, which buries the
+    /// actual reason and makes the report unreadable. The dump is kept only as a
+    /// fallback for a platform that does not populate the structured key.
     private static func xpcDescription(_ object: xpc_object_t) -> String? {
+        let structured = xpcErrorDescriptionKey.withCString { key in
+            errorDescriptionString(object, key).map { String(cString: $0) }
+        }
+        if let structured, !structured.isEmpty { return structured }
         let ptr = xpc_copy_description(object)
         defer { free(ptr) }
         return String(cString: ptr)
@@ -462,16 +482,10 @@ public enum CrossProcessProbe {
                 returnValue: "\(result.length) bytes",
                 errorName: result.errorName,
                 observed: result.value,
-                interpretation: result.outcome == .succeeded
-                    ? """
-                    The executable path of a protected process was disclosed to an \
-                    ordinary app. That is an information disclosure beyond the \
-                    caller's own process.
-                    """
-                    : """
-                    Refused. The path of a process other than the caller is not \
-                    disclosed, which is the expected boundary.
-                    """
+                interpretation: introspectionInterpretation(
+                    outcome: result.outcome,
+                    errorName: result.errorName
+                )
             ))
         }
 
@@ -543,6 +557,40 @@ public enum CrossProcessProbe {
     private static func machErrorName(_ kr: kern_return_t) -> String {
         guard let ptr = cMachErrorString(mach_error_t(kr)) else { return "kern_return_t \(kr)" }
         return String(cString: ptr)
+    }
+
+    /// Interpretation of a `proc_pidpath` result on a process other than the
+    /// caller.
+    ///
+    /// The three non-success cases mean different things and must not be
+    /// collapsed. A denial is a policy result. `ESRCH` means the process does
+    /// not exist, which is not a security event at all and would be
+    /// misrepresented if reported as a refusal.
+    private static func introspectionInterpretation(
+        outcome: IntrospectionOutcome,
+        errorName: String?
+    ) -> String {
+        switch outcome {
+        case .succeeded:
+            return """
+                The executable path of a protected process was disclosed to an \
+                ordinary app. That is an information disclosure beyond the \
+                caller's own process.
+                """
+        case .denied:
+            return """
+                Refused\(errorName.map { " (\($0))" } ?? ""). The path of a process \
+                other than the caller is not disclosed, which is the expected boundary.
+                """
+        case .notApplicable:
+            return """
+                No path was returned, and no denial is implied: \(errorName ?? "the call") \
+                indicates the target has no executable path rather than that access \
+                was refused. This is not a security observation.
+                """
+        case .notAttempted:
+            return "The call was not attempted, so nothing is claimed about the boundary."
+        }
     }
 
     private struct PidPathResult {
