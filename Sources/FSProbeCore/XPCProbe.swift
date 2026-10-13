@@ -144,19 +144,9 @@ public enum XPCProbe {
         var reachability: Reachability = .noResponse
         var refusalReason: String?
 
-        // Signature: xpc_connection_create_mach_service(name, target_queue, flags).
-        // NULL means the default queue. The flags argument is a UInt64 bitfield;
-        // zero requests a plain connection with no listener semantics.
-        // nil for the target queue means "the default queue" in Swift; NULL would
-        // be imported as the empty tuple, which is not a queue.
         // NSXPCConnection is the supported, portable way to reach a mach service
-        // from an app. The C connection API is unavailable on iOS.
+        // from an app; the C connection API is unavailable on iOS.
         let connection = NSXPCConnection(machServiceName: name)
-
-        let semaphore = DispatchSemaphore(value: 0)
-        let lock = NSLock()
-        var reachability: Reachability = .noResponse
-        var refusalReason: String?
 
         // An interruption handler fires when launchd refuses the lookup or the
         // service dies. Its NSError carries the platform's own reason.
