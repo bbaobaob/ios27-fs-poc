@@ -155,29 +155,15 @@ public enum AlternateLookupProbe {
 
     #if canImport(Darwin)
 
-    @_silgen_name("task_get_bootstrap_port")
-    private static func sTaskGetBootstrapPort(
-        _ task: mach_port_t, _ bootstrapPort: UnsafeMutablePointer<mach_port_t>
-    ) -> Int32
-
-    @_silgen_name("bootstrap_look_up")
-    private static func sBootstrapLookUp(
-        _ bp: mach_port_t, _ serviceName: UnsafePointer<CChar>,
-        _ servicePort: UnsafeMutablePointer<mach_port_t>
-    ) -> Int32
-
-    private static var symbolsAvailable: Bool { true }
-
-    #else
-
-    private static var symbolsAvailable: Bool { false }
+    // Bound once in MachShim. Binding them here too would make the compiler
+    // share one implementation across two different signatures.
 
     #endif
 
     public static func probe() -> Result {
         #if canImport(Darwin)
         var bootstrapPort: mach_port_t = 0
-        let kr = sTaskGetBootstrapPort(mach_task_self_, &bootstrapPort)
+        let kr = MachShim.taskGetBootstrapPort(MachShim.taskSelf, &bootstrapPort)
         guard kr == 0, bootstrapPort != 0 else {
             // Without a bootstrap port nothing can be looked up, and every result
             // below would be an artifact of that rather than a measurement.
@@ -234,13 +220,13 @@ public enum AlternateLookupProbe {
         var servicePort: mach_port_t = 0
         setErrno(0)
         let kr = entry.name.withCString { name in
-            sBootstrapLookUp(bootstrapPort, name, &servicePort)
+            MachShim.bootstrapLookUp(bootstrapPort, name, &servicePort)
         }
 
         if kr == 0 && servicePort != 0 {
             // A port was resolved. Release it immediately: the experiment is about
             // whether the lookup was permitted, not about using the service.
-            _ = mach_port_deallocate(mach_task_self_, servicePort)
+            _ = MachShim.deallocatePort(MachShim.taskSelf, servicePort)
 
             let bypassed = entry.xpc == "refused"
             return Lookup(
@@ -276,17 +262,8 @@ public enum AlternateLookupProbe {
         )
     }
 
-    @_silgen_name("mach_error_string")
-    private static func sMachErrorString(_ error: mach_error_t) -> UnsafePointer<CChar>?
-
-    @_silgen_name("mach_port_deallocate")
-    private static func mach_port_deallocate(_ task: mach_port_t, _ name: mach_port_t) -> Int32
-
     private static func machErrorName(_ kr: Int32) -> String {
-        guard let ptr = sMachErrorString(mach_error_t(kr)) else {
-            return "kern_return_t \(kr)"
-        }
-        return String(cString: ptr)
+        MachShim.machErrorString(kr)
     }
 
     #endif

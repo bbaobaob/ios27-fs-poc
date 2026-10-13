@@ -385,28 +385,9 @@ public enum CrossProcessProbe {
 
     #if canImport(Darwin)
 
-    // Bound by symbol name rather than through the header, so the harness does
-    // not depend on libproc.h being importable by Swift. All three are ordinary
-    // documented libSystem functions.
-    @_silgen_name("proc_pidpath")
-    private static func cProcPidPath(
-        _ pid: Int32, _ buffer: UnsafeMutableRawPointer, _ size: UInt32
-    ) -> Int32
-
-    @_silgen_name("task_for_pid")
-    private static func cTaskForPid(
-        _ target: mach_port_t, _ pid: Int32, _ task: UnsafeMutablePointer<mach_port_t>
-    ) -> Int32
-
-    // The buffer is nullable: the sizing call passes NULL, exactly as the
-    // documented `proc_listallpids(NULL, 0)` idiom requires.
-    @_silgen_name("proc_listallpids")
-    private static func cProcListAllPids(
-        _ buffer: UnsafeMutableRawPointer?, _ size: Int32
-    ) -> Int32
-
-    @_silgen_name("mach_error_string")
-    private static func cMachErrorString(_ error: mach_error_t) -> UnsafePointer<CChar>?
+    // The Mach and libproc symbols are bound once, in MachShim. Binding them
+    // here as well would make the compiler share one implementation across two
+    // different signatures and fail the build.
 
     /// Test whether an ordinary app can observe or control another process.
     ///
@@ -494,7 +475,7 @@ public enum CrossProcessProbe {
         for pid in [Int32(1), Int32(0)] {
             let target = pid == 1 ? "launchd (pid 1)" : "kernel (pid 0)"
             var taskPort: mach_port_t = 0
-            let kr = cTaskForPid(mach_task_self_, pid, &taskPort)
+            let kr = MachShim.taskForPid(MachShim.taskSelf, pid, &taskPort)
             let outcome: IntrospectionOutcome = kr == 0 ? .succeeded : .denied
             attempts.append(IntrospectionAttempt(
                 operation: "task_for_pid",
@@ -555,8 +536,7 @@ public enum CrossProcessProbe {
     }
 
     private static func machErrorName(_ kr: kern_return_t) -> String {
-        guard let ptr = cMachErrorString(mach_error_t(kr)) else { return "kern_return_t \(kr)" }
-        return String(cString: ptr)
+        MachShim.machErrorString(Int32(kr))
     }
 
     /// Interpretation of a `proc_pidpath` result on a process other than the
@@ -617,7 +597,7 @@ public enum CrossProcessProbe {
         // pid 1 had just set it, so the "kernel has no executable path"
         // interpretation was derived from an inherited errno.
         setErrno(0)
-        let rc = cProcPidPath(pid, buffer, UInt32(pidPathBufferSize))
+        let rc = MachShim.procPidPath(pid, buffer, UInt32(pidPathBufferSize))
         if rc > 0 {
             let path = String(cString: buffer.assumingMemoryBound(to: CChar.self))
             return PidPathResult(
@@ -650,7 +630,7 @@ public enum CrossProcessProbe {
 
     private static func countAllProcesses() -> PidListResult {
         // First call sizes the buffer, second fills it.
-        let needed = cProcListAllPids(nil, 0)
+        let needed = MachShim.procListAllPids(nil, 0)
         guard needed > 0 else {
             let err = currentErrno()
             return PidListResult(
@@ -662,7 +642,7 @@ public enum CrossProcessProbe {
             byteCount: Int(needed), alignment: MemoryLayout<Int32>.alignment
         )
         defer { buffer.deallocate() }
-        let filled = cProcListAllPids(buffer, needed)
+        let filled = MachShim.procListAllPids(buffer, needed)
         guard filled > 0 else {
             let err = currentErrno()
             return PidListResult(

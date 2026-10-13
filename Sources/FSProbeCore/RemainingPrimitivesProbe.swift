@@ -126,12 +126,6 @@ public enum RemainingPrimitivesProbe {
         _ buf: UnsafeMutableRawPointer?, _ bufsize: Int32, _ flags: Int32
     ) -> Int32
 
-    @_silgen_name("mach_host_self")
-    private static func sMachHostSelf() -> mach_port_t
-
-    @_silgen_name("mach_port_deallocate")
-    private static func sMachPortDeallocate(_ task: mach_port_t, _ name: mach_port_t) -> Int32
-
     @_silgen_name("sysctlbyname")
     private static func sSysctlbyname(
         _ name: UnsafePointer<CChar>, _ oldp: UnsafeMutableRawPointer?,
@@ -247,14 +241,14 @@ public enum RemainingPrimitivesProbe {
         }
 
         #if canImport(Darwin)
-        let port = sMachHostSelf()
+        let port = MachShim.hostSelf()
         let answered = port != 0
         let portDescription = "port \(port)"
 
         // Release it immediately: the experiment is about whether a host port is
         // obtainable, not about using it.
         if answered {
-            _ = sMachPortDeallocate(mach_task_self_, port)
+            _ = MachShim.deallocatePort(MachShim.taskSelf, port)
         }
         #else
         let answered = false
