@@ -247,8 +247,11 @@ public enum CrossProcessProbe {
     }
 
     /// Render any xpc object as a string, for the platform's own error text.
+    ///
+    /// `xpc_copy_description` returns a non-optional malloc'd buffer: it always
+    /// produces a description, so there is nothing to guard against.
     private static func xpcDescription(_ object: xpc_object_t) -> String? {
-        guard let ptr = xpc_copy_description(object) else { return nil }
+        let ptr = xpc_copy_description(object)
         defer { free(ptr) }
         return String(cString: ptr)
     }
@@ -375,9 +378,11 @@ public enum CrossProcessProbe {
         _ target: mach_port_t, _ pid: Int32, _ task: UnsafeMutablePointer<mach_port_t>
     ) -> Int32
 
+    // The buffer is nullable: the sizing call passes NULL, exactly as the
+    // documented `proc_listallpids(NULL, 0)` idiom requires.
     @_silgen_name("proc_listallpids")
     private static func cProcListAllPids(
-        _ buffer: UnsafeMutableRawPointer, _ size: Int32
+        _ buffer: UnsafeMutableRawPointer?, _ size: Int32
     ) -> Int32
 
     @_silgen_name("mach_error_string")
