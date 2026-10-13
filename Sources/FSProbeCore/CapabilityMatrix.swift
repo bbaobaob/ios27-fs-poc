@@ -61,6 +61,8 @@ public struct CapabilityMatrix: Sendable {
     public let alternateLookups: AlternateLookupProbe.Result?
     /// Primitives never tried before: mount table, host port, kernel MIBs, copyfile.
     public let remainingPrimitives: RemainingPrimitivesProbe.Result?
+    /// Volume-wide name search, a different VFS operation from directory reads.
+    public let searchFS: SearchFSProbe.Result?
 
     /// Results of testing whether a user-granted scope is confined to what the
     /// user picked. Nil until the user grants access.
@@ -89,7 +91,8 @@ public struct CapabilityMatrix: Sendable {
         descriptorPrimitives: DescriptorPrimitiveProbe.Result? = nil,
         foundationSurface: FoundationSurfaceProbe.Result? = nil,
         alternateLookups: AlternateLookupProbe.Result? = nil,
-        remainingPrimitives: RemainingPrimitivesProbe.Result? = nil
+        remainingPrimitives: RemainingPrimitivesProbe.Result? = nil,
+        searchFS: SearchFSProbe.Result? = nil
     ) {
         self.results = results
         self.environment = environment
@@ -112,6 +115,7 @@ public struct CapabilityMatrix: Sendable {
         self.foundationSurface = foundationSurface
         self.alternateLookups = alternateLookups
         self.remainingPrimitives = remainingPrimitives
+        self.searchFS = searchFS
     }
 
     /// Platform context captured at run time.

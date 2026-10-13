@@ -442,6 +442,27 @@ public enum ReportExporter {
             }
         }
 
+        if let search = matrix.searchFS {
+            lines.append("")
+            lines.append("Volume-wide name search (searchfs):")
+            for item in search.searches {
+                let flag = item.isBoundaryViolation ? "  <-- BOUNDARY VIOLATION" : ""
+                lines.append("  [\(item.outcome.rawValue)] \(item.id)\(flag)")
+                lines.append("      \(item.operation)  args: \(item.arguments)")
+                if let errno = item.errnoName { lines.append("      errno: \(errno)") }
+                if let count = item.matchCount { lines.append("      matches: \(count)") }
+                lines.append("      observed: \(item.observed ?? "no answer")")
+                lines.append("      result: \(item.interpretation)")
+            }
+            if !search.violations.isEmpty {
+                lines.append("  VIOLATIONS: \(search.violations.map { $0.id }.joined(separator: ", "))")
+            } else if search.searches.isEmpty {
+                lines.append("  NOT_ATTEMPTED: no searchfs experiment ran.")
+            } else {
+                lines.append("  the volume-wide search was refused, as the policy predicts")
+            }
+        }
+
         if let io = matrix.inodeOpen {
             lines.append("")
             lines.append("Open-by-inode (openbyid_np: no path traversal at all):")
@@ -563,6 +584,7 @@ public enum ReportExporter {
         let foundationSurface: FoundationSurfaceProbe.Result?
         let alternateLookups: AlternateLookupProbe.Result?
         let remainingPrimitives: RemainingPrimitivesProbe.Result?
+        let searchFS: SearchFSProbe.Result?
 
         init(matrix: CapabilityMatrix) {
             self.schema = "fsprobe.capability-matrix.v9"
@@ -587,6 +609,7 @@ public enum ReportExporter {
             self.foundationSurface = matrix.foundationSurface
             self.alternateLookups = matrix.alternateLookups
             self.remainingPrimitives = matrix.remainingPrimitives
+            self.searchFS = matrix.searchFS
         }
     }
 }

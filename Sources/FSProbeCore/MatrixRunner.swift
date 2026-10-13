@@ -64,6 +64,7 @@ public struct MatrixRunner: Sendable {
         var foundationSurface: FoundationSurfaceProbe.Result?
         var alternateLookups: AlternateLookupProbe.Result?
         var remainingPrimitives: RemainingPrimitivesProbe.Result?
+        var searchFS: SearchFSProbe.Result?
         if runBoundaryExperiments {
             // The container is the app's own home; every experiment is scoped to
             // it and to paths it cannot reach.
@@ -142,6 +143,10 @@ public struct MatrixRunner: Sendable {
             // Primitives never tried before, each a separate authorization
             // predicate: the mount table, a host port, kernel MIBs, and copyfile.
             remainingPrimitives = RemainingPrimitivesProbe.probe(containerPath: container)
+
+            // A volume-wide name search, which is a different VFS operation from
+            // reading a directory and has never been tested.
+            searchFS = SearchFSProbe.probe(containerPath: container)
         }
 
         return CapabilityMatrix(
@@ -163,7 +168,8 @@ public struct MatrixRunner: Sendable {
             descriptorPrimitives: descriptorPrimitives,
             foundationSurface: foundationSurface,
             alternateLookups: alternateLookups,
-            remainingPrimitives: remainingPrimitives
+            remainingPrimitives: remainingPrimitives,
+            searchFS: searchFS
         )
     }
 }
