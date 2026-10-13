@@ -324,20 +324,41 @@ public enum XPCProbe {
             )
         }
 
+        // Coordination succeeding is NOT read access. NSFileCoordinator arbitrates
+        // access to a URL; it does not grant it. What matters is whether the bytes
+        // could actually be read inside the accessor, so the effect is reported
+        // separately from the coordination outcome.
+        let effect: String
+        if readBytes > 0 {
+            effect = """
+                \(readBytes) bytes were read inside the accessor, which is the security-relevant \
+                effect: content from a path the caller cannot open was obtained.
+                """
+        } else if accessorRan {
+            effect = """
+                The accessor ran but read 0 bytes: coordination was granted while the \
+                underlying read was not. Coordination is not authorization, so this is \
+                the expected shape and is not a read primitive.
+                """
+        } else {
+            effect = "The accessor did not run."
+        }
+
         return Experiment(
             id: id, mechanism: mechanism,
             operation: "NSFileCoordinator.coordinate(readingItemAt:)",
             arguments: url.path,
             expected: expectedDenied
-                ? "Denied. The URL lies outside the container and the caller holds no grant for it."
+                ? "Denied, or granted without read access: coordination is not authorization."
                 : "Permitted. The URL is inside the container.",
             expectedDenied: expectedDenied,
-            outcome: .permitted,
+            // A violation requires the effect, not merely the coordination.
+            outcome: readBytes > 0 ? .permitted : .denied,
             errorDomain: nil, errorCode: nil,
             errorDescription: nil,
             interpretation: """
                 Coordination succeeded (accessor ran: \(accessorRan), \(readBytes) bytes read). \
-                The deputy coordinated a URL the caller cannot open by path.
+                \(effect)
                 """
         )
     }
@@ -385,21 +406,29 @@ public enum XPCProbe {
             )
         }
 
+        // A violation requires the file to actually exist at the destination.
+        // Coordination succeeding while nothing lands is not a write primitive.
         return Experiment(
             id: id, mechanism: mechanism,
             operation: "NSFileCoordinator.coordinate(writingItemAt:)",
             arguments: url.path,
             expected: expectedDenied
-                ? "Denied. The destination lies outside the container."
+                ? "Denied, or granted without the file landing: coordination is not authorization."
                 : "Permitted. The destination is inside the container.",
             expectedDenied: expectedDenied,
-            outcome: .permitted,
+            outcome: landed ? .permitted : .denied,
             errorDomain: nil, errorCode: nil,
             errorDescription: nil,
-            interpretation: """
-                Coordination succeeded (accessor ran: \(accessorRan), file appeared at the \
-                destination: \(landed)). A file was created outside the app container by a \
-                system service acting on the caller's behalf.
+            interpretation: landed
+                ? """
+                Coordination succeeded and the file appeared at the destination. A file was \
+                created outside the app container by a system service acting on the \
+                caller's behalf.
+                """
+                : """
+                Coordination succeeded (accessor ran: \(accessorRan)) but no file appeared at \
+                the destination: the write was refused underneath. Coordination is not \
+                authorization, so this is the expected shape and is not a write primitive.
                 """
         )
     }

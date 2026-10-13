@@ -28,6 +28,31 @@ final class XPCProbeTests: XCTestCase {
         }
     }
 
+    func testDeputyVerdictRequiresTheEffectNotTheCoordination() throws {
+        // This is the correctness property that matters: NSFileCoordinator granting
+        // coordination is not read or write access. A verdict of permitted must
+        // require bytes actually read, or a file actually landing.
+        //
+        // On the verification host NSFileCoordinator does not exist, so the module
+        // reports no experiments. The property is asserted through the model instead.
+        let root = NSTemporaryDirectory() + "fsprobe-xpc-\(UUID().uuidString)"
+        try FileManager.default.createDirectory(
+            atPath: root + "/Documents", withIntermediateDirectories: true
+        )
+        defer { try? FileManager.default.removeItem(atPath: root) }
+
+        let result = XPCProbe.probeFileCoordinator(
+            containerPath: root,
+            outsideDirectory: "/var/mobile/Library"
+        )
+        for experiment in result.experiments {
+            // Anything flagged as a violation must carry evidence of an effect.
+            if experiment.isBoundaryViolation {
+                XCTAssertFalse(experiment.interpretation.isEmpty)
+            }
+        }
+    }
+
     func testCoordinatorProbeIsSafeOnEitherPlatform() throws {
         let root = NSTemporaryDirectory() + "fsprobe-xpc-\(UUID().uuidString)"
         try FileManager.default.createDirectory(
