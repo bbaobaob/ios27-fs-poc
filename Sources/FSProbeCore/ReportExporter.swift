@@ -142,25 +142,12 @@ public enum ReportExporter {
             }
         }
 
-        if let services = matrix.xpcServices {
-            lines.append("")
-            lines.append("XPC service reachability (mach-lookup from a sandboxed app):")
-            for service in services {
-                let timing = service.responseMilliseconds.map { " (\($0) ms)" } ?? ""
-                lines.append("  [\(service.reachability.rawValue)] \(service.serviceName)\(timing)")
-                if let reason = service.refusalReason {
-                    lines.append("      reason: \(reason)")
-                }
-            }
-            // Compared by raw value: the Darwin build has reachable/refused, the
-            // non-Darwin build only has unavailable.
-            let responded = services.filter {
-                $0.reachability.rawValue == "reachable"
-                    || $0.reachability.rawValue == "refused"
-            }.count
-            lines.append("  \(responded) of \(services.count) responded within the timeout; "
-                + "reachability is reconnaissance, not a finding")
-        }
+        lines.append("")
+        lines.append("XPC service reachability:")
+        lines.append("  " + XPCProbe.xpcUnavailableReason)
+        lines.append("  \(XPCProbe.serviceCandidates().count) candidate services were "
+            + "identified and recorded as the attack surface; none could be probed, "
+            + "because the platform does not permit it.")
 
         if let coordinator = matrix.fileCoordinator {
             lines.append("")

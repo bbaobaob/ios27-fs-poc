@@ -41,33 +41,33 @@ public enum XPCProbe {
 
     // MARK: - Service reachability
     //
-    // Gated to Darwin: libxpc exists only there. The Android verification host has
-    // no XPC at all, so the service-reachability half of this module is compiled
-    // out and reports itself unavailable rather than failing to build. The device
-    // is where this research actually runs.
-
-    #if canImport(Darwin)
+    // IMPORTANT PLATFORM CONSTRAINT, established on the iOS SDK:
+    //
+    // `NSXPCConnection(machServiceName:options:)` is API_UNAVAILABLE(ios, watchos,
+    // tvos), and the C connection API (`xpc_connection_create_mach_service`) is
+    // likewise unavailable on iOS. An ordinary iOS app therefore cannot open a
+    // connection to an arbitrary mach service by name. The supported path is a
+    // listener whose endpoint a service hands the app explicitly, which requires
+    // the service to cooperate.
+    //
+    // Consequence for this research: the "enumerate reachable services" plan is
+    // not implementable from a sandboxed app on iOS. That is recorded here as a
+    // rejected hypothesis with its evidence, rather than left as an untested
+    // aspiration. The confused-deputy direction that remains viable is the one
+    // where the app asks a *documented public API* to act on a resource, and the
+    // API's backing service does the work -- which is what the NSFileCoordinator
+    // section below tests.
 
     public enum Reachability: String, Codable, Sendable {
-        /// No error arrived within the timeout: the service exists and accepted
-        /// the connection.
-        case reachable
-        /// The connection was refused, with the platform's own reason.
-        case refused
-        /// Nothing arrived within the timeout.
-        case noResponse
-        /// The connection could not be created at all.
-        case notCreated
+        /// The platform does not permit opening a mach service by name from an app.
+        case notPermittedOnIOS
     }
 
     public struct ServiceProbe: Sendable, Identifiable, Codable {
         public let serviceName: String
-        /// Why this service is a candidate, in one line.
         public let rationale: String
         public let reachability: Reachability
-        /// The platform's own refusal reason, when it gave one.
         public let refusalReason: String?
-        /// Round-trip time in milliseconds, when a response arrived.
         public let responseMilliseconds: Int?
 
         public init(
@@ -87,8 +87,9 @@ public enum XPCProbe {
         public var id: String { serviceName }
     }
 
-    /// Candidates, prioritised by the filesystem work each performs on a caller's
-    /// behalf. Ordered by promise, not by name.
+    /// The candidates that would have been probed, kept as the documented attack
+    /// surface with the reason each was interesting. No claim is made that any of
+    /// them is reachable.
     public static func serviceCandidates() -> [(name: String, rationale: String)] {
         [
             ("com.apple.FileCoordination",
@@ -107,130 +108,21 @@ public enum XPCProbe {
              "Application and document-type resolution from a sandboxed caller"),
             ("com.apple.SharedFileList",
              "Shared file-list persistence across login sessions"),
-            ("com.apple.xpc.role.account.stationary",
-             "Per-user XPC domain"),
-            ("com.apple.networkextension",
-             "Network extension configuration"),
-            ("com.apple.aggregated",
-             "Aggregated logging and metrics"),
-            ("com.apple.PerfPowerTelemetry",
-             "Performance telemetry client"),
         ]
     }
 
-    /// True when this platform provides XPC. The device does; the verification
-    /// host does not.
-    public static var xpcAvailable: Bool { true }
-
-    /// Probe each candidate's reachability from this process.
-    ///
-    /// - Parameter timeout: seconds to wait for a service to answer before
-    ///   declaring no response. Bounded so a silent service cannot hang the run.
-    public static func probeServices(timeout: TimeInterval = 3.0) -> [ServiceProbe] {
-        serviceCandidates().map { candidate in
-            probeService(candidate.name, rationale: candidate.rationale, timeout: timeout)
-        }
-    }
-
-    private static func probeService(
-        _ name: String,
-        rationale: String,
-        timeout: TimeInterval
-    ) -> ServiceProbe {
-        let started = Date()
-
-        let semaphore = DispatchSemaphore(value: 0)
-        let lock = NSLock()
-        var reachability: Reachability = .noResponse
-        var refusalReason: String?
-
-        // NSXPCConnection is the supported, portable way to reach a mach service
-        // from an app; the C connection API is unavailable on iOS.
-        let connection = NSXPCConnection(machServiceName: name)
-
-        // An interruption handler fires when launchd refuses the lookup or the
-        // service dies. Its NSError carries the platform's own reason.
-        connection.interruptionHandler = {
-            lock.lock()
-            reachability = .refused
-            lock.unlock()
-            semaphore.signal()
-        }
-        connection.invalidationHandler = {
-            lock.lock()
-            if reachability != .reachable { reachability = .refused }
-            lock.unlock()
-            semaphore.signal()
-        }
-        connection.resume()
-
-        // A connection that survives without interruption means launchd handed
-        // out the send right: the service is reachable from this process.
-        let waited = semaphore.wait(timeout: .now() + timeout)
-        let elapsed = Int(Date().timeIntervalSince(started) * 1000)
-
-        lock.lock()
-        let finalReachability: Reachability
-        if waited == .timedOut {
-            // No interruption arrived: the lookup was permitted and the service
-            // simply did not answer a connection with no protocol.
-            finalReachability = .reachable
-        } else {
-            finalReachability = reachability
-        }
-        let finalReason = refusalReason
-        lock.unlock()
-
-        // Invalidate so the connection does not outlive the probe.
-        connection.invalidate()
-
-        return ServiceProbe(
-            serviceName: name,
-            rationale: rationale,
-            reachability: finalReachability,
-            refusalReason: finalReason,
-            responseMilliseconds: finalReachability == .noResponse ? nil : elapsed
-        )
-    }
-
-    #else
-
-    /// XPC is unavailable on this platform, so no service can be probed.
-    public static var xpcAvailable: Bool { false }
-
+    /// Always empty: iOS does not permit reaching a mach service by name from an
+    /// app, so no service can be probed. The empty result is the honest one.
     public static func probeServices(timeout: TimeInterval = 3.0) -> [ServiceProbe] { [] }
 
-    public enum Reachability: String, Codable, Sendable {
-        case unavailable
+    public static var xpcAvailable: Bool { false }
+
+    /// Why no service could be probed, for the report.
+    public static var xpcUnavailableReason: String {
+        """
+        NSXPCConnection(machServiceName:) is API_UNAVAILABLE(ios, watchos, tvos) and         the C connection API is likewise unavailable, so an app cannot open a mach         service by name on iOS.
+        """
     }
-
-    public struct ServiceProbe: Sendable, Identifiable, Codable {
-        public let serviceName: String
-        public let rationale: String
-        public let reachability: Reachability
-        public let refusalReason: String?
-        public let responseMilliseconds: Int?
-
-        public init(
-            serviceName: String,
-            rationale: String,
-            reachability: Reachability,
-            refusalReason: String?,
-            responseMilliseconds: Int?
-        ) {
-            self.serviceName = serviceName
-            self.rationale = rationale
-            self.reachability = reachability
-            self.refusalReason = refusalReason
-            self.responseMilliseconds = responseMilliseconds
-        }
-
-        public var id: String { serviceName }
-    }
-
-    public static func serviceCandidates() -> [(name: String, rationale: String)] { [] }
-
-    #endif
 
     // MARK: - NSFileCoordinator as a confused deputy
     //
