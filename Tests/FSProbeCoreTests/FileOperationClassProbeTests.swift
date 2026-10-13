@@ -95,23 +95,42 @@ final class FileOperationClassProbeTests: XCTestCase {
         }
     }
 
-    func testControlFailureIsReportedRatherThanADenial() throws {
-        // On the verification host, link() between two paths in the same temporary
-        // directory is refused by the host filesystem, so the control fails and the
-        // probe must report controlFailed rather than claiming a sandbox denial.
-        // This is the control gate doing its job, and it is asserted here so the
-        // behaviour is not accidentally "fixed" into a false denial later.
+    func testAFailedControlIsNeverReportedAsADenial() throws {
+        // The invariant that matters, stated so it holds on every platform: a
+        // result may only be called `denied` when its control succeeded. A refusal
+        // measured against a broken control says nothing about policy.
+        //
+        // The platforms disagree about the control, and that is the point. On the
+        // verification host link() in a temporary directory is refused, so the
+        // control fails and the case must read controlFailed. On macOS it succeeds,
+        // so the case legitimately reads denied. Asserting either outcome outright
+        // would encode one platform's behaviour as the rule.
         let root = try scratchContainer()
         defer { try? FileManager.default.removeItem(atPath: root) }
 
         let result = FileOperationClassProbe.probe(containerPath: root)
-        for experiment in result.experiments where experiment.id.hasPrefix("link-reverse") {
-            XCTAssertNotEqual(experiment.outcome, .denied,
-                              "a failed control must never be reported as a policy denial")
+        XCTAssertFalse(result.experiments.isEmpty)
+        for experiment in result.experiments {
+            if experiment.outcome == .denied {
+                XCTAssertTrue(
+                    experiment.observed?.contains("control") == true
+                        && experiment.observed?.contains("succeeded") == true,
+                    "\(experiment.id) is reported as a denial, but its control did not succeed"
+                )
+                XCTAssertNotNil(experiment.errnoName,
+                                "\(experiment.id) is denied without an errno")
+            }
+            // Whatever the platform, a control failure must never become a
+            // violation, and a violation must never be claimed without evidence.
             if experiment.outcome == .controlFailed {
                 XCTAssertFalse(experiment.isBoundaryViolation)
             }
+            if experiment.isBoundaryViolation {
+                XCTAssertTrue(experiment.cleanedUp,
+                              "\(experiment.id) created an artifact and did not remove it")
+            }
         }
+        XCTAssertTrue(result.violations.allSatisfy { $0.outcome == .permitted })
     }
 
     func testViolationListMatchesPerExperimentFlags() throws {

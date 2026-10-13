@@ -522,13 +522,6 @@ enum OutcomeFamily: String, Sendable {
     }
 }
 
-func middleTruncated(_ text: String, limit: Int) -> String {
-    guard text.count > limit, limit >= 4 else { return text }
-    let head = (limit - 1) / 2
-    let tail = limit - 1 - head
-    return String(text.prefix(head)) + "…" + String(text.suffix(tail))
-}
-
 func formatDuration(_ seconds: Double) -> String {
     guard seconds.isFinite, seconds >= 0 else { return "—" }
     return seconds < 1
