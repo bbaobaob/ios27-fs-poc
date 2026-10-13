@@ -400,6 +400,27 @@ public enum ReportExporter {
             }
         }
 
+        if let lookups = matrix.alternateLookups {
+            lines.append("")
+            lines.append("Mach service lookup by a path other than the XPC factory:")
+            lines.append("  bootstrap port available: \(lookups.bootstrapPortAvailable)")
+            for item in lookups.lookups {
+                let flag = item.isBoundaryViolation ? "  <-- BYPASS" : ""
+                let xpc = item.xpcOutcome.map { "XPC: \($0)" } ?? "XPC: unknown"
+                lines.append("  [\(item.outcome.rawValue)] \(item.serviceName)  (\(xpc))\(flag)")
+                if let rv = item.returnValue { lines.append("      return: \(rv)") }
+                if let err = item.errorName { lines.append("      error: \(err)") }
+                lines.append("      result: \(item.interpretation)")
+            }
+            if !lookups.violations.isEmpty {
+                lines.append("  BYPASSES: \(lookups.violations.map { $0.serviceName }.joined(separator: ", "))")
+            } else if !lookups.bootstrapPortAvailable {
+                lines.append("  NOT_ATTEMPTED: no bootstrap port, so nothing was measured")
+            } else {
+                lines.append("  no service resolved here that the XPC path refused")
+            }
+        }
+
         if let io = matrix.inodeOpen {
             lines.append("")
             lines.append("Open-by-inode (openbyid_np: no path traversal at all):")
@@ -519,6 +540,7 @@ public enum ReportExporter {
         let metadataReads: MetadataReadProbe.Result?
         let descriptorPrimitives: DescriptorPrimitiveProbe.Result?
         let foundationSurface: FoundationSurfaceProbe.Result?
+        let alternateLookups: AlternateLookupProbe.Result?
 
         init(matrix: CapabilityMatrix) {
             self.schema = "fsprobe.capability-matrix.v9"
@@ -541,6 +563,7 @@ public enum ReportExporter {
             self.metadataReads = matrix.metadataReads
             self.descriptorPrimitives = matrix.descriptorPrimitives
             self.foundationSurface = matrix.foundationSurface
+            self.alternateLookups = matrix.alternateLookups
         }
     }
 }

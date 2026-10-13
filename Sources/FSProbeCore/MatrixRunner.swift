@@ -62,6 +62,7 @@ public struct MatrixRunner: Sendable {
         var metadataReads: MetadataReadProbe.Result?
         var descriptorPrimitives: DescriptorPrimitiveProbe.Result?
         var foundationSurface: FoundationSurfaceProbe.Result?
+        var alternateLookups: AlternateLookupProbe.Result?
         if runBoundaryExperiments {
             // The container is the app's own home; every experiment is scoped to
             // it and to paths it cannot reach.
@@ -131,6 +132,11 @@ public struct MatrixRunner: Sendable {
             // libc. Includes access(), never tested directly, and the one public
             // API that reaches containermanagerd.
             foundationSurface = FoundationSurfaceProbe.probe(containerPath: container)
+
+            // A different path to a mach service than the XPC connection factory.
+            // If the mach-lookup gate depends on which API asks, a service XPC
+            // refused may be resolvable here.
+            alternateLookups = AlternateLookupProbe.probe()
         }
 
         return CapabilityMatrix(
@@ -150,7 +156,8 @@ public struct MatrixRunner: Sendable {
             operationClasses: operationClasses,
             metadataReads: metadataReads,
             descriptorPrimitives: descriptorPrimitives,
-            foundationSurface: foundationSurface
+            foundationSurface: foundationSurface,
+            alternateLookups: alternateLookups
         )
     }
 }
