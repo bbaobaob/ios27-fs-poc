@@ -67,6 +67,7 @@ public struct MatrixRunner: Sendable {
         var searchFS: SearchFSProbe.Result?
         var machPrivilege: MachPrivilegeProbe.Result?
         var xpcReplies: XPCReplyProbe.Result?
+        var ipcSurface: IPCSurfaceProbe.Result?
         if runBoundaryExperiments {
             // The container is the app's own home; every experiment is scoped to
             // it and to paths it cannot reach.
@@ -157,6 +158,9 @@ public struct MatrixRunner: Sendable {
             // Reachability is not the same as answering. This asks the second
             // question of the services the lookup experiment reached.
             xpcReplies = XPCReplyProbe.probe()
+
+            // The remaining IPC surface, including a THIRD name-resolution path.
+            ipcSurface = IPCSurfaceProbe.probe()
         }
 
         return CapabilityMatrix(
@@ -181,7 +185,8 @@ public struct MatrixRunner: Sendable {
             remainingPrimitives: remainingPrimitives,
             searchFS: searchFS,
             machPrivilege: machPrivilege,
-            xpcReplies: xpcReplies
+            xpcReplies: xpcReplies,
+            ipcSurface: ipcSurface
         )
     }
 }

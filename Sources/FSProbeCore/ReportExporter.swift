@@ -509,6 +509,25 @@ public enum ReportExporter {
             }
         }
 
+        if let ipc = matrix.ipcSurface {
+            lines.append("")
+            lines.append("IPC surface reachable from an ordinary app:")
+            for item in ipc.mechanisms {
+                let flag = item.isBoundaryViolation ? "  <-- BOUNDARY VIOLATION" : ""
+                lines.append("  [\(item.outcome.rawValue)] \(item.id)\(flag)")
+                lines.append("      \(item.operation)  args: \(item.arguments)")
+                lines.append("      observed: \(item.observed ?? "no answer")")
+                lines.append("      result: \(item.interpretation)")
+            }
+            if !ipc.violations.isEmpty {
+                lines.append("  VIOLATIONS: \(ipc.violations.map { $0.id }.joined(separator: ", "))")
+            } else if ipc.mechanisms.isEmpty {
+                lines.append("  NOT_ATTEMPTED: no IPC mechanism ran.")
+            } else {
+                lines.append("  no IPC mechanism reached a name the lookup paths refused")
+            }
+        }
+
         if let io = matrix.inodeOpen {
             lines.append("")
             lines.append("Open-by-inode (openbyid_np: no path traversal at all):")
@@ -633,6 +652,7 @@ public enum ReportExporter {
         let searchFS: SearchFSProbe.Result?
         let machPrivilege: MachPrivilegeProbe.Result?
         let xpcReplies: XPCReplyProbe.Result?
+        let ipcSurface: IPCSurfaceProbe.Result?
 
         init(matrix: CapabilityMatrix) {
             self.schema = "fsprobe.capability-matrix.v9"
@@ -660,6 +680,7 @@ public enum ReportExporter {
             self.searchFS = matrix.searchFS
             self.machPrivilege = matrix.machPrivilege
             self.xpcReplies = matrix.xpcReplies
+            self.ipcSurface = matrix.ipcSurface
         }
     }
 }

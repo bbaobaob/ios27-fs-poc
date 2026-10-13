@@ -239,7 +239,7 @@ public enum XPCReplyProbe {
         // An empty message: no path, no identifier, no resource reference. This
         // asks only whether the service answers a caller it has not identified.
         let message = xpc_dictionary_create(nil, nil, 0)
-        xpc_connection_send_message_with_reply(connection, message) { replyEvent in
+        cSendMessageWithReply(connection, message, nil) { replyEvent in
             lock.lock()
             defer { lock.unlock() }
             if xpc_get_type(replyEvent) == XPC_TYPE_ERROR {
@@ -310,6 +310,17 @@ public enum XPCReplyProbe {
         }
         return unsafeBitCast(sym, to: CreateMachServiceFn.self)
     }
+
+    // Bound by name with the full signature. The imported
+    // xpc_connection_send_message_with_reply takes a reply QUEUE as its third
+    // argument, which the two-argument call site does not supply.
+    @_silgen_name("xpc_connection_send_message_with_reply")
+    private static func cSendMessageWithReply(
+        _ connection: xpc_connection_t,
+        _ message: xpc_object_t,
+        _ replyQueue: DispatchQueue?,
+        _ handler: @escaping @convention(block) (xpc_object_t) -> Void
+    )
 
     // Bound by name with the full signature, because the imported
     // xpc_dictionary_get_string takes position and options arguments that the

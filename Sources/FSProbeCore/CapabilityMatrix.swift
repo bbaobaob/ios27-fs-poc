@@ -67,6 +67,8 @@ public struct CapabilityMatrix: Sendable {
     public let machPrivilege: MachPrivilegeProbe.Result?
     /// Whether the reachable services actually answer a message.
     public let xpcReplies: XPCReplyProbe.Result?
+    /// The IPC mechanisms an ordinary app can actually reach.
+    public let ipcSurface: IPCSurfaceProbe.Result?
 
     /// Results of testing whether a user-granted scope is confined to what the
     /// user picked. Nil until the user grants access.
@@ -98,7 +100,8 @@ public struct CapabilityMatrix: Sendable {
         remainingPrimitives: RemainingPrimitivesProbe.Result? = nil,
         searchFS: SearchFSProbe.Result? = nil,
         machPrivilege: MachPrivilegeProbe.Result? = nil,
-        xpcReplies: XPCReplyProbe.Result? = nil
+        xpcReplies: XPCReplyProbe.Result? = nil,
+        ipcSurface: IPCSurfaceProbe.Result? = nil
     ) {
         self.results = results
         self.environment = environment
@@ -124,6 +127,7 @@ public struct CapabilityMatrix: Sendable {
         self.searchFS = searchFS
         self.machPrivilege = machPrivilege
         self.xpcReplies = xpcReplies
+        self.ipcSurface = ipcSurface
     }
 
     /// Platform context captured at run time.
