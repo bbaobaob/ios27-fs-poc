@@ -51,9 +51,17 @@ public enum ContainerWriteProbe {
         /// Number of entries, when enumerable.
         public let entryCount: Int?
         /// Whether a synthetic file could be created inside it.
+        ///
+        /// True only when the write was verified by a matching read-back: an
+        /// unverified write is not a writable directory, and claiming otherwise
+        /// would report a capability the harness never observed.
         public let writable: Bool
         /// errno from the create attempt, when refused.
         public let createErrnoName: String?
+        /// errno from the write() call, when the create succeeded and the write
+        /// did not. Kept apart from `createErrnoName` because it came from a
+        /// different syscall.
+        public let writeErrnoName: String?
         /// errno from the read-back open, when the create succeeded.
         public let readBackErrnoName: String?
         /// Whether written content read back identically.
@@ -73,6 +81,7 @@ public enum ContainerWriteProbe {
             entryCount: Int?,
             writable: Bool,
             createErrnoName: String?,
+            writeErrnoName: String?,
             readBackErrnoName: String?,
             readBackMatched: Bool?,
             removable: Bool,
@@ -87,6 +96,7 @@ public enum ContainerWriteProbe {
             self.entryCount = entryCount
             self.writable = writable
             self.createErrnoName = createErrnoName
+            self.writeErrnoName = writeErrnoName
             self.readBackErrnoName = readBackErrnoName
             self.readBackMatched = readBackMatched
             self.removable = removable
@@ -95,10 +105,13 @@ public enum ContainerWriteProbe {
 
         public var id: String { "\(depth):\(path)" }
 
-        /// True when the directory is enumerable but refuses writes, which is the
-        /// shape the container root has.
+        /// True when the directory is enumerable but refused the create, which is
+        /// the shape the container root has.
+        ///
+        /// A directory that accepted a write the harness could not verify is
+        /// *not* counted here: that is neither "read-only" nor a confirmed write.
         public var readableButNotWritable: Bool {
-            enumerable && !writable
+            enumerable && !writable && createErrnoName != nil
         }
     }
 
@@ -222,8 +235,9 @@ public enum ContainerWriteProbe {
             return Entry(
                 path: path, depth: depth, exists: false, modeOctal: nil,
                 isDirectory: false, enumerable: false, entryCount: nil,
-                writable: false, createErrnoName: nil, readBackErrnoName: nil,
-                readBackMatched: nil, removable: false, childNames: []
+                writable: false, createErrnoName: nil, writeErrnoName: nil,
+                readBackErrnoName: nil, readBackMatched: nil, removable: false,
+                childNames: []
             )
         }
 
@@ -247,6 +261,7 @@ public enum ContainerWriteProbe {
         // Writability: create the synthetic file, read it back, remove it.
         var writable = false
         var createErrnoName: String?
+        var writeErrnoName: String?
         var readBackErrnoName: String?
         var readBackMatched: Bool?
         var removable = false
@@ -259,9 +274,11 @@ public enum ContainerWriteProbe {
                 guard let base = raw.baseAddress else { return -1 }
                 return POSIXShim.writeFD(fd, base, raw.count)
             }
+            // errno is read before close() runs, because close() may replace it
+            // with its own status and the wrong errno would then be reported.
+            let writeErrno: Int32? = written < 0 ? currentErrno() : nil
             POSIXShim.closeFile(fd)
             if written == payload.count {
-                writable = true
 
                 // Read back through the same path to confirm content.
                 let readFD = POSIXShim.openFile(target, O_RDONLY, 0)
@@ -271,22 +288,34 @@ public enum ContainerWriteProbe {
                         guard let base = ptr.baseAddress else { return -1 }
                         return POSIXShim.readFD(readFD, base, ptr.count)
                     }
+                    // Captured before close(); n == 0 is a clean end-of-file and
+                    // carries no errno, so it must not be dressed up as one.
+                    let readErrno: Int32? = n < 0 ? currentErrno() : nil
                     POSIXShim.closeFile(readFD)
                     if n > 0 {
                         readBackMatched = Data(readBuffer.prefix(n)) == payload
-                    } else {
-                        readBackErrnoName = ErrorClassifier.errnoName(currentErrno())
+                    } else if let readErrno {
+                        readBackErrnoName = ErrorClassifier.errnoName(readErrno)
                     }
                 } else {
-                    readBackErrnoName = ErrorClassifier.errnoName(currentErrno())
+                    let openErrno = currentErrno()
+                    readBackErrnoName = ErrorClassifier.errnoName(openErrno)
                 }
 
+                // Writability is what was *verified*, not what was attempted:
+                // a write the harness could not read back is not a capability.
+                writable = (readBackMatched == true)
                 removable = POSIXShim.unlinkFile(target) == 0
             } else {
-                createErrnoName = ErrorClassifier.errnoName(currentErrno())
+                // The file was created, so it must be removed again here as
+                // well; leaving it behind would litter the container this probe
+                // is only meant to observe.
+                _ = POSIXShim.unlinkFile(target)
+                writeErrnoName = writeErrno.map { ErrorClassifier.errnoName($0) }
             }
         } else {
-            createErrnoName = ErrorClassifier.errnoName(currentErrno())
+            let createErrno = currentErrno()
+            createErrnoName = ErrorClassifier.errnoName(createErrno)
         }
 
         let childNames = isDirectory
@@ -303,6 +332,7 @@ public enum ContainerWriteProbe {
             entryCount: entryCount,
             writable: writable,
             createErrnoName: createErrnoName,
+            writeErrnoName: writeErrnoName,
             readBackErrnoName: readBackErrnoName,
             readBackMatched: readBackMatched,
             removable: removable,

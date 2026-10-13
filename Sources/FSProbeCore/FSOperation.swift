@@ -26,7 +26,8 @@ public enum FSOperation: String, Codable, Sendable, CaseIterable {
     case readFile = "open+read"
     /// `open(O_CREAT|O_EXCL)` — create a new file.
     case createFile = "open+create"
-    /// `open(O_WRONLY|O_TRUNC)` + `write()` — modify an existing file.
+    /// `open(O_WRONLY|O_CREAT|O_TRUNC)` + `write()` — create or overwrite the
+    /// synthetic file in the target directory.
     case writeFile = "open+write"
     /// `unlink()` — remove a file.
     case deleteFile = "unlink"
@@ -49,7 +50,11 @@ public enum FSOperation: String, Codable, Sendable, CaseIterable {
         case .createFile:
             return "Creating a new file inside the target directory."
         case .writeFile:
-            return "Opening an existing file for writing and modifying its bytes."
+            // The flags are O_CREAT|O_TRUNC and the target is the harness's own
+            // synthetic file, which the probe has just removed — so this creates
+            // the file and then writes into it. Describing it as "modifying an
+            // existing file" would misstate what was actually executed.
+            return "Creating or overwriting the synthetic file in the target directory and writing its bytes."
         case .deleteFile:
             return "Removing a file with unlink()."
         case .readLink:

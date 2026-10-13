@@ -193,12 +193,20 @@ public enum POSIXProbeEngine {
 
         let fd = POSIXShim.openFile(target, O_CREAT | O_EXCL | O_WRONLY, 0o644)
         guard fd >= 0 else {
-            return failure(path: target, operation: .createFile, targetPath: path)
+            let code = currentErrno()
+            return failure(path: target, operation: .createFile, code: code, targetPath: path)
         }
         let verification = verifyWrite(fd: fd, target: target, payload: payload)
         if verification.written < 0 {
             POSIXShim.unlinkFile(target)
-            return failure(path: target, operation: .createFile, targetPath: path)
+            // errno is read inside verifyWrite, immediately after the failing
+            // write(): close() may reset it, so it is captured, not re-read.
+            return failure(
+                path: target,
+                operation: .createFile,
+                code: verification.writeErrno,
+                targetPath: path
+            )
         }
 
         POSIXShim.unlinkFile(target)
@@ -224,17 +232,29 @@ public enum POSIXProbeEngine {
 
     private static func writeFileProbe(path: String, payload: Data) -> ProbeResult {
         // The write probe operates on the synthetic file *inside* the target
-        // directory: it must never overwrite a pre-existing system file.
+        // directory: it must never overwrite a pre-existing system file. The
+        // synthetic name is the harness's own, and `createFileProbe` removes it
+        // when it runs, so in a full matrix this open() creates the file rather
+        // than modifying an existing one — which is why the operation is
+        // documented as "create or overwrite", not "modify".
         let target = URL(fileURLWithPath: path).appendingPathComponent(syntheticFileName).path
 
         let fd = POSIXShim.openFile(target, O_WRONLY | O_CREAT | O_TRUNC, 0o644)
         guard fd >= 0 else {
-            return failure(path: target, operation: .writeFile, targetPath: path)
+            let code = currentErrno()
+            return failure(path: target, operation: .writeFile, code: code, targetPath: path)
         }
         let verification = verifyWrite(fd: fd, target: target, payload: payload)
         if verification.written < 0 {
             POSIXShim.unlinkFile(target)
-            return failure(path: target, operation: .writeFile, targetPath: path)
+            // The write() errno was captured inside verifyWrite, before close()
+            // could overwrite it.
+            return failure(
+                path: target,
+                operation: .writeFile,
+                code: verification.writeErrno,
+                targetPath: path
+            )
         }
 
         POSIXShim.unlinkFile(target)
@@ -262,17 +282,27 @@ public enum POSIXProbeEngine {
         let target = URL(fileURLWithPath: path).appendingPathComponent(syntheticFileName).path
 
         // Create first so the unlink test is meaningful; if creation fails the
-        // unlink result is meaningless and is reported as such.
+        // unlink result is meaningless and is reported as such. The failing call
+        // here is the *create*, so its errno is attributed to the create and the
+        // note says why no unlink result exists.
         let fd = POSIXShim.openFile(target, O_CREAT | O_EXCL | O_WRONLY, 0o644)
         if fd < 0 {
-            return failure(path: target, operation: .deleteFile, targetPath: path)
+            let code = currentErrno()
+            var result = failure(path: target, operation: .createFile, code: code, targetPath: path)
+            result.note = """
+                unlink could not be tested: the synthetic file it would remove could not be \
+                created (\(ErrorClassifier.errnoName(code))).
+                """
+            return result
         }
         POSIXShim.closeFile(fd)
 
         let rc = POSIXShim.unlinkFile(target)
         if rc != 0 {
+            // Captured before the cleanup attempt, which would overwrite errno.
+            let code = currentErrno()
             POSIXShim.unlinkFile(target)
-            return failure(path: target, operation: .deleteFile, targetPath: path)
+            return failure(path: target, operation: .deleteFile, code: code, targetPath: path)
         }
         return ProbeResult(
             path: target,
@@ -294,11 +324,17 @@ public enum POSIXProbeEngine {
             return POSIXShim.readLink(path, into: base, capacity: ptr.count)
         }
         if rc < 0 {
-            return failure(path: path, operation: .readLink)
+            let code = currentErrno()
+            return failure(path: path, operation: .readLink, code: code)
         }
         // readlink() does not NUL-terminate; the buffer is zero-initialized and
         // the result is bounded, so slice explicitly.
         let target = String(decoding: buffer.prefix(rc), as: UTF8.self)
+        // readlink() returns the length it *would* have written, so a return that
+        // fills the buffer means the target did not fit (or filled it exactly) and
+        // what is recorded here is at best a prefix of it. That is flagged rather
+        // than silently reported as the whole target.
+        let truncated = rc >= linkBufferCapacity
         return ProbeResult(
             path: path,
             operation: .readLink,
@@ -306,8 +342,11 @@ public enum POSIXProbeEngine {
             errnoNumber: 0,
             errnoName: nil,
             errnoDescription: nil,
-            evidence: ProbeEvidence(linkTarget: target),
-            cause: .documentedCapability
+            evidence: ProbeEvidence(linkTarget: target, linkTruncated: truncated),
+            cause: .documentedCapability,
+            note: truncated
+                ? "readlink filled its \(linkBufferCapacity)-byte buffer, so the recorded target may be truncated."
+                : nil
         )
     }
 
@@ -316,13 +355,18 @@ public enum POSIXProbeEngine {
     /// Returns the evidence fields for a write probe: bytes written, whether the
     /// read-back matched, how many bytes came back, and where the first
     /// difference is. A bare "did not match" is not interpretable.
+    ///
+    /// The write errno is captured immediately after the failing `write()`, before
+    /// `close()` runs, so the caller reports the errno that actually produced the
+    /// failure rather than whatever errno the close left behind.
     private static func verifyWrite(fd: Int32, target: String, payload: Data)
         -> (written: Int, matched: Bool, bytesReadBack: Int, mismatchAt: Int?,
-            openErrno: Int32?, readErrno: Int32?)
+            writeErrno: Int32?, openErrno: Int32?, readErrno: Int32?)
     {
         let written = writeAll(fd: fd, payload: payload)
+        let writeErrno: Int32? = written < 0 ? currentErrno() : nil
         POSIXShim.closeFile(fd)
-        guard written >= 0 else { return (written, false, 0, nil, nil, nil) }
+        guard written >= 0 else { return (written, false, 0, nil, writeErrno, nil, nil) }
 
         let readBackOutcome = readBackDetailed(target)
         let readBackData = readBackOutcome.data
@@ -340,14 +384,14 @@ public enum POSIXProbeEngine {
             }
         }
         return (written, matched, readBackData.count, mismatchAt,
-                readBackOutcome.openErrno, readBackOutcome.readErrno)
+                writeErrno, readBackOutcome.openErrno, readBackOutcome.readErrno)
     }
 
     /// Human-readable account of a write probe, including why a read-back
     /// mismatch happened when it does.
     private static func writeNote(
         _ v: (written: Int, matched: Bool, bytesReadBack: Int, mismatchAt: Int?,
-              openErrno: Int32?, readErrno: Int32?),
+              writeErrno: Int32?, openErrno: Int32?, readErrno: Int32?),
         created: Bool
     ) -> String {
         var parts: [String] = [
@@ -356,7 +400,10 @@ public enum POSIXProbeEngine {
                 : "Synthetic file written, verified by read-back, then removed."
         ]
         if v.matched { return parts[0] }
-        if let openErrno = v.openErrno {
+        if let writeErrno = v.writeErrno {
+            parts.append("write failed: \(ErrorClassifier.errnoName(writeErrno)) "
+                         + "(\(ErrorClassifier.description(for: writeErrno)))")
+        } else if let openErrno = v.openErrno {
             parts.append("read-back open failed: \(ErrorClassifier.errnoName(openErrno)) "
                          + "(\(ErrorClassifier.description(for: openErrno)))")
         } else if let readErrno = v.readErrno {

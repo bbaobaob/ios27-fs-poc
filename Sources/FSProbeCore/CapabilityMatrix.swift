@@ -117,6 +117,26 @@ public struct CapabilityMatrix: Sendable {
         public let label: String
         public let isBaseline: Bool
         public let cells: [FSOperation: ProbeOutcome]
+        /// The errno name behind each cell, carried alongside the outcome.
+        ///
+        /// An outcome alone is not the evidence: `failedOther` says nothing
+        /// about *which* errno was observed, so the two are kept together rather
+        /// than collapsed into one value at render time.
+        public let errnoNames: [FSOperation: String]
+
+        public init(
+            path: String,
+            label: String,
+            isBaseline: Bool,
+            cells: [FSOperation: ProbeOutcome],
+            errnoNames: [FSOperation: String] = [:]
+        ) {
+            self.path = path
+            self.label = label
+            self.isBaseline = isBaseline
+            self.cells = cells
+            self.errnoNames = errnoNames
+        }
 
         public var id: String { path }
 
@@ -136,10 +156,20 @@ public struct CapabilityMatrix: Sendable {
         targets.map { target in
             let perPath = results(for: target.path)
             var cells: [FSOperation: ProbeOutcome] = [:]
+            var errnoNames: [FSOperation: String] = [:]
             for (op, result) in perPath {
                 cells[op] = result.outcome
+                if let errno = result.errnoName, !errno.isEmpty {
+                    errnoNames[op] = errno
+                }
             }
-            return Row(path: target.path, label: target.label, isBaseline: target.isBaseline, cells: cells)
+            return Row(
+                path: target.path,
+                label: target.label,
+                isBaseline: target.isBaseline,
+                cells: cells,
+                errnoNames: errnoNames
+            )
         }
     }
 

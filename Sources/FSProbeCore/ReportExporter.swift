@@ -27,24 +27,44 @@ public enum ReportExporter {
         lines.append("")
 
         let ops = FSOperation.allCases
+        let rows = matrix.rows(targets: targets)
+
+        // Each cell is "outcome errno": the outcome says what kind of result it
+        // was, the errno says exactly which failure was observed. A cell with no
+        // result is rendered as the explicit not-attempted outcome rather than a
+        // dash, so a missing measurement can never be read as a passing one.
+        let table: [[FSOperation: String]] = rows.map { row in
+            var cells: [FSOperation: String] = [:]
+            for op in ops {
+                guard let outcome = row.cells[op] else {
+                    cells[op] = ProbeOutcome.notAttempted.rawValue
+                    continue
+                }
+                if let errno = row.errnoNames[op] {
+                    cells[op] = "\(outcome.rawValue) \(errno)"
+                } else {
+                    cells[op] = outcome.rawValue
+                }
+            }
+            return cells
+        }
+
         let pathWidth = max(28, (targets.map { $0.path.count }.max() ?? 28))
+        // Wide enough for the widest cell this run produced, so an errno is
+        // never cut off by the column it is printed in.
+        let cellWidth = max(12, table.flatMap { $0.values }.map { $0.count }.max() ?? 12)
         var header = "path".padding(toLength: pathWidth, withPad: " ", startingAt: 0)
         for op in ops {
-            header += " " + op.rawValue.padding(toLength: 12, withPad: " ", startingAt: 0)
+            header += " " + op.rawValue.padding(toLength: cellWidth, withPad: " ", startingAt: 0)
         }
         lines.append(header)
         lines.append(String(repeating: "-", count: header.count))
 
-        for row in matrix.rows(targets: targets) {
+        for (index, row) in rows.enumerated() {
             var line = row.path.padding(toLength: pathWidth, withPad: " ", startingAt: 0)
             for op in ops {
-                let cell: String
-                if let outcome = row.cells[op] {
-                    cell = outcome.rawValue
-                } else {
-                    cell = "-"
-                }
-                line += " " + cell.padding(toLength: 12, withPad: " ", startingAt: 0)
+                let cell = table[index][op] ?? ProbeOutcome.notAttempted.rawValue
+                line += " " + cell.padding(toLength: cellWidth, withPad: " ", startingAt: 0)
             }
             lines.append(line)
         }
@@ -102,13 +122,35 @@ public enum ReportExporter {
             lines.append("Container write boundary (synthetic file, verified, removed):")
             lines.append("  container: \(cw.containerPath)")
             for entry in cw.entries {
-                let verdict = entry.writable
-                    ? "WRITABLE"
-                    : (entry.readableButNotWritable ? "read-only" : "not probed")
+                // The verdict names the state that was actually observed: a
+                // refusal, a write that could not be verified, or a probe that
+                // never reached the syscall. A recorded errno is what separates
+                // "denied" from "not probed".
+                let verdict: String
+                if entry.writable {
+                    verdict = "WRITABLE"
+                } else if entry.createErrnoName != nil {
+                    verdict = entry.enumerable ? "read-only" : "denied"
+                } else if entry.writeErrnoName != nil || entry.readBackErrnoName != nil
+                            || entry.readBackMatched != nil {
+                    verdict = "wrote, not verified"
+                } else {
+                    verdict = "not probed"
+                }
                 let mode = entry.modeOctal.map { " mode=\($0)" } ?? ""
                 let count = entry.entryCount.map { " entries=\($0)" } ?? ""
-                let errno = entry.createErrnoName.map { " [\($0)]" } ?? ""
-                lines.append("  \(entry.depth) \(entry.path) — \(verdict)\(mode)\(count)\(errno)")
+                lines.append("  \(entry.depth) \(entry.path) — \(verdict)\(mode)\(count)")
+
+                // Every field the probe recorded is printed, not just the one
+                // that produced the verdict: which errno, whether the read-back
+                // matched, and whether the synthetic file could be removed again.
+                var evidence: [String] = []
+                if let errno = entry.createErrnoName { evidence.append("create errno: \(errno)") }
+                if let errno = entry.writeErrnoName { evidence.append("write errno: \(errno)") }
+                if let errno = entry.readBackErrnoName { evidence.append("read-back errno: \(errno)") }
+                if let matched = entry.readBackMatched { evidence.append("read-back matched: \(matched)") }
+                evidence.append("removed: \(entry.removable)")
+                lines.append("      \(evidence.joined(separator: ", "))")
             }
             lines.append("  writable:                \(cw.writablePaths.joined(separator: ", "))")
             lines.append("  readable but not writable: \(cw.readableButNotWritablePaths.joined(separator: ", "))")
@@ -142,12 +184,26 @@ public enum ReportExporter {
             }
         }
 
-        lines.append("")
-        lines.append("XPC service reachability:")
-        lines.append("  " + XPCProbe.xpcUnavailableReason)
-        lines.append("  \(XPCProbe.serviceCandidates().count) candidate services were "
-            + "identified and recorded as the attack surface; none could be probed, "
-            + "because the platform does not permit it.")
+        // The XPC section is printed only when the experiments that produce it
+        // were requested. Printing it unconditionally would state a conclusion
+        // about service reachability for runs that never asked the question.
+        if matrix.xpcServices != nil || matrix.fileCoordinator != nil {
+            lines.append("")
+            lines.append("XPC service reachability:")
+            if let services = matrix.xpcServices, !services.isEmpty {
+                for service in services {
+                    lines.append("  \(service.serviceName): \(service.reachability.rawValue)"
+                                 + " (\(service.responseMilliseconds.map { "\($0)ms" } ?? "no response"))")
+                    if let reason = service.refusalReason { lines.append("      \(reason)") }
+                }
+            } else {
+                lines.append("  NOT_ATTEMPTED: no mach service was opened, named, or probed.")
+                lines.append("  \(XPCProbe.serviceCandidates().count) candidate services were "
+                    + "identified and recorded as the attack surface; none could be probed.")
+            }
+            lines.append("  reason (an SDK availability fact, not a measurement): "
+                + XPCProbe.xpcUnavailableReason)
+        }
 
         if let coordinator = matrix.fileCoordinator {
             lines.append("")
@@ -163,6 +219,8 @@ public enum ReportExporter {
             }
             if !coordinator.violations.isEmpty {
                 lines.append("  VIOLATIONS: \(coordinator.violations.map { $0.id }.joined(separator: ", "))")
+            } else if coordinator.experiments.isEmpty {
+                lines.append("  NOT_ATTEMPTED: no coordination experiment ran on this platform.")
             } else {
                 lines.append("  no coordination succeeded where the policy predicts refusal")
             }
@@ -282,7 +340,7 @@ public enum ReportExporter {
         let securityScopeAfterRelease: SecurityScopeProbe.Result?
 
         init(matrix: CapabilityMatrix) {
-            self.schema = "fsprobe.capability-matrix.v8"
+            self.schema = "fsprobe.capability-matrix.v9"
             self.environment = matrix.environment
             self.results = matrix.results
             self.ancestors = matrix.ancestors

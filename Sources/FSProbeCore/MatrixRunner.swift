@@ -73,6 +73,10 @@ public struct MatrixRunner: Sendable {
             // Service-mediated authorization: which XPC services this process can
             // reach, and whether NSFileCoordinator performs unauthorized work on
             // the caller's behalf.
+            //
+            // `xpcAvailable` is a compile-time SDK-availability fact, not a
+            // measurement, so the service list stays nil and the report labels the
+            // section NOT_ATTEMPTED rather than drawing a reachability conclusion.
             xpcServices = XPCProbe.xpcAvailable
                 ? XPCProbe.probeServices(timeout: 3.0)
                 : nil

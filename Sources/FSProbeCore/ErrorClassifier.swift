@@ -61,6 +61,7 @@ public enum ErrorClassifier {
         case 0: return .succeeded
         case Int32(ENOENT): return .notFound
         case Int32(ENOTDIR): return .notDirectory
+        case Int32(EISDIR): return .isDirectory
         case Int32(EPERM): return .deniedEPERM
         case Int32(EACCES): return .deniedEACCES
         default: return .failedOther
@@ -77,11 +78,20 @@ public enum ErrorClassifier {
             return .documentedCapability
         case .notFound, .notDirectory:
             return .pathAbsent
+        case .isDirectory:
+            // EISDIR is the documented POSIX answer to reading a directory: it
+            // happens for an authorized process too, so it is neither a denial
+            // nor an unexplained anomaly. The read-back layer knows from
+            // `ProbeEvidence.statIsDirectory` when the target really is one.
+            return .documentedCapability
         case .deniedEPERM:
             // On iOS, EPERM from the sandbox is the seatbelt denial signature.
             return .sandboxEnforcement
         case .deniedEACCES:
             return .posixPermissions
+        case .notAttempted:
+            // Nothing ran, so nothing was observed.
+            return .configurationIssue
         case .failedOther:
             return pathExisted ? .unexplained : .pathAbsent
         }

@@ -45,6 +45,11 @@ iPhone running iOS 27. Neither is available here.
 
 ## Runs
 
+**Schema tag.** The exporter currently writes `fsprobe.capability-matrix.v9`. Entries below that
+quote an earlier tag (`v1`, `v2`, …) record what that dated artifact actually contained; they are
+historical records of a specific build and are not rewritten when the tag advances. The tag to
+expect from the current code is the one stated here.
+
 ### 2026-10-11 — macOS runner host (NOT a device)
 
 - Platform: macOS 15.7.9 (Build 24G830), `VirtualMac2,1`, Xcode 16.4, `macos-15` runner.
@@ -104,7 +109,8 @@ _Pending — blocked: no iOS 27 runtime or Xcode release is available in this en
   - Executable: Mach-O 64-bit arm64, links `/usr/lib/dyld`, contains no
     `/Library/Developer/CoreSimulator` path — a **device** binary, not a simulator slice.
   - Contains the probe engine: the strings `fsprobe-writetest.tmp`, `kern.osversion`,
-    `matrix.json`, and the `fsprobe.capability-matrix.v1` schema tag are all present.
+    `matrix.json`, and the `fsprobe.capability-matrix.v1` schema tag are all present (the tag this
+    artifact carried; the current exporter emits v9).
 - Limitations: **unsigned**. Built with `CODE_SIGNING_ALLOWED=NO`, so there is no
   `_CodeSignature`. It cannot be installed on a stock device as-is. Installing requires a
   signing step with an Apple ID (free personal accounts are sufficient for development
@@ -124,7 +130,8 @@ _Pending — blocked: no iOS 27 runtime or Xcode release is available in this en
   - Executable: Mach-O 64-bit arm64, links `/usr/lib/dyld`, contains no
     `/Library/Developer/CoreSimulator` path — a device binary.
   - Contains the probe engine: `fsprobe-writetest.tmp`, `kern.osversion`, `matrix.json`, and
-    the `fsprobe.capability-matrix.v1` schema tag are all present.
+    the `fsprobe.capability-matrix.v1` schema tag are all present (the tag this artifact carried;
+    the current exporter emits v9).
 - Size: 1.4 MB, versus 325 KB for the xcodebuild-produced IPA. Both are device binaries; the
   difference is build configuration, not platform.
 - Limitations: **unsigned** and **never executed**. No runtime result is claimed.
@@ -146,7 +153,8 @@ Verified for both:
 - `Payload/FSProbe.app/FSProbe` is a Mach-O 64-bit **arm64 device** binary (links
   `/usr/lib/dyld`, contains no `/Library/Developer/CoreSimulator` path).
 - Contains the current experiment code: the `fsprobe.capability-matrix.v2` schema
-  tag, the `Boundary established` ascent stop reason, and the
+  tag (the tag this artifact carried; the current exporter emits v9), the
+  `Boundary established` ascent stop reason, and the
   `fsprobe-writetest.tmp` synthetic filename.
 - Bundle identity: `com.bbaobaob.fsprobe`, `MinimumOSVersion = 17.0`,
   `CFBundleSupportedPlatforms = iPhoneOS`.

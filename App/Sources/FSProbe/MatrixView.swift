@@ -1671,7 +1671,7 @@ extension OutcomeFamily {
         case .succeeded: self = .success
         case .deniedEPERM, .deniedEACCES: self = .denial
         case .notFound: self = .absent
-        case .notDirectory, .failedOther: self = .other
+        case .notDirectory, .isDirectory, .failedOther, .notAttempted: self = .other
         }
     }
 
@@ -1700,7 +1700,9 @@ extension OutcomeFamily {
         case .deniedEACCES: return .barred
         case .notFound: return .dashedRing
         case .notDirectory: return .triangle
+        case .isDirectory: return .triangle
         case .failedOther: return .diamond
+        case .notAttempted: return .unrecorded
         }
     }
 }
@@ -1714,7 +1716,11 @@ extension ProbeOutcome {
         case .notDirectory: return "A path component is not a directory (ENOTDIR)."
         case .deniedEPERM: return "Denied by the platform sandbox (EPERM)."
         case .deniedEACCES: return "Denied by POSIX permission bits or ACLs (EACCES)."
+        case .isDirectory:
+            return "The target is a directory (EISDIR). Expected for open+read on a "
+                + "directory; not an access denial."
         case .failedOther: return "Failed with some other errno."
+        case .notAttempted: return "No attempt was made: there is no measurement for this cell."
         }
     }
 }

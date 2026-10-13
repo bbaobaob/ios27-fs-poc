@@ -352,7 +352,9 @@ final class MatrixViewModel {
         case .deniedEACCES: family = .denial;  shape = .barred
         case .notFound:    family = .absent;  shape = .dashedRing
         case .notDirectory: family = .other;  shape = .triangle
+        case .isDirectory: family = .other;   shape = .triangle
         case .failedOther: family = .other;   shape = .diamond
+        case .notAttempted: family = .other;  shape = .unrecorded
         }
 
         return MatrixCell(

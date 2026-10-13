@@ -112,16 +112,17 @@ public enum XPCProbe {
     }
 
     /// Always empty: iOS does not permit reaching a mach service by name from an
-    /// app, so no service can be probed. The empty result is the honest one.
+    /// app, so no service can be probed. The empty result is the honest one, and
+    /// the report labels it as not attempted rather than as a reachability finding.
     public static func probeServices(timeout: TimeInterval = 3.0) -> [ServiceProbe] { [] }
 
+    /// False on the basis of SDK availability, not of any attempted connection.
     public static var xpcAvailable: Bool { false }
 
-    /// Why no service could be probed, for the report.
+    /// Why no service could be probed, for the report. This is an availability
+    /// fact about the SDK, not an observation of this process's access.
     public static var xpcUnavailableReason: String {
-        """
-        NSXPCConnection(machServiceName:) is API_UNAVAILABLE(ios, watchos, tvos) and         the C connection API is likewise unavailable, so an app cannot open a mach         service by name on iOS.
-        """
+        "NSXPCConnection(machServiceName:) is API_UNAVAILABLE(ios, watchos, tvos) and the C connection API is likewise unavailable, so an app cannot open a mach service by name on iOS."
     }
 
     // MARK: - NSFileCoordinator as a confused deputy
@@ -134,7 +135,14 @@ public enum XPCProbe {
 
     public enum Outcome: String, Codable, Sendable {
         case permitted
+        /// The coordination itself was refused — an NSError came back from
+        /// NSFileCoordinator and the accessor never ran.
         case denied
+        /// Coordination was granted, but the operation underneath produced no
+        /// effect. Distinct from `denied`: the deputy said yes and the filesystem
+        /// still said no, and reporting that as a refusal would overstate what
+        /// was refused.
+        case grantedNoEffect
         case notApplicable
         case error
     }
@@ -291,6 +299,7 @@ public enum XPCProbe {
         expectedDenied: Bool
     ) -> Experiment {
         var coordinatorError: NSError?
+        var accessorError: NSError?
         var accessorRan = false
         var readBytes = 0
 
@@ -298,10 +307,19 @@ public enum XPCProbe {
         coordinator.coordinate(readingItemAt: url, options: [], error: &coordinatorError) { readURL in
             accessorRan = true
             // The accessor is handed a URL; reading it is the effect that matters.
-            if let handle = try? FileHandle(forReadingFrom: readURL) {
-                let data = handle.readData(ofLength: 4096)
-                readBytes = data.count
-                try? handle.close()
+            // Each step's error is kept: "could not open" and "could not read"
+            // are different facts, and neither is "read 0 bytes".
+            do {
+                let handle = try FileHandle(forReadingFrom: readURL)
+                defer { try? handle.close() }
+                do {
+                    let data = try handle.readData(ofLength: 4096)
+                    readBytes = data.count
+                } catch {
+                    accessorError = error as NSError
+                }
+            } catch {
+                accessorError = error as NSError
             }
         }
 
@@ -334,9 +352,16 @@ public enum XPCProbe {
                 \(readBytes) bytes were read inside the accessor, which is the security-relevant \
                 effect: content from a path the caller cannot open was obtained.
                 """
+        } else if let error = accessorError {
+            effect = """
+                Coordination was granted, but the read underneath failed with \
+                \(error.domain) \(error.code): \(error.localizedDescription) \
+                Coordination is not authorization, so this is the expected shape \
+                and is not a read primitive.
+                """
         } else if accessorRan {
             effect = """
-                The accessor ran but read 0 bytes: coordination was granted while the \
+                The accessor ran but read 0 bytes with no error: coordination was granted while the \
                 underlying read was not. Coordination is not authorization, so this is \
                 the expected shape and is not a read primitive.
                 """
@@ -352,10 +377,13 @@ public enum XPCProbe {
                 ? "Denied, or granted without read access: coordination is not authorization."
                 : "Permitted. The URL is inside the container.",
             expectedDenied: expectedDenied,
-            // A violation requires the effect, not merely the coordination.
-            outcome: readBytes > 0 ? .permitted : .denied,
-            errorDomain: nil, errorCode: nil,
-            errorDescription: nil,
+            // A violation requires the effect, not merely the coordination, and
+            // "granted but ineffective" is its own verdict rather than a denial:
+            // the deputy granted the coordination and the filesystem refused it.
+            outcome: readBytes > 0 ? .permitted : .grantedNoEffect,
+            errorDomain: accessorError?.domain,
+            errorCode: accessorError?.code,
+            errorDescription: accessorError?.localizedDescription,
             interpretation: """
                 Coordination succeeded (accessor ran: \(accessorRan), \(readBytes) bytes read). \
                 \(effect)
@@ -375,12 +403,19 @@ public enum XPCProbe {
         try? FileManager.default.removeItem(atPath: url.path)
 
         var coordinatorError: NSError?
+        var accessorError: NSError?
         var accessorRan = false
 
         let coordinator = NSFileCoordinator()
         coordinator.coordinate(writingItemAt: url, options: [], error: &coordinatorError) { writeURL in
             accessorRan = true
-            try? payload.write(to: writeURL, options: .atomic)
+            do {
+                try payload.write(to: writeURL, options: .atomic)
+            } catch {
+                // The underlying failure is recorded in its own right: it is what
+                // refused the write, independently of what coordination said.
+                accessorError = error as NSError
+            }
         }
 
         let landed = FileManager.default.fileExists(atPath: url.path)
@@ -416,9 +451,10 @@ public enum XPCProbe {
                 ? "Denied, or granted without the file landing: coordination is not authorization."
                 : "Permitted. The destination is inside the container.",
             expectedDenied: expectedDenied,
-            outcome: landed ? .permitted : .denied,
-            errorDomain: nil, errorCode: nil,
-            errorDescription: nil,
+            outcome: landed ? .permitted : .grantedNoEffect,
+            errorDomain: accessorError?.domain,
+            errorCode: accessorError?.code,
+            errorDescription: accessorError?.localizedDescription,
             interpretation: landed
                 ? """
                 Coordination succeeded and the file appeared at the destination. A file was \
@@ -427,8 +463,9 @@ public enum XPCProbe {
                 """
                 : """
                 Coordination succeeded (accessor ran: \(accessorRan)) but no file appeared at \
-                the destination: the write was refused underneath. Coordination is not \
-                authorization, so this is the expected shape and is not a write primitive.
+                the destination: the write was refused underneath\(accessorError.map { " with \($0.domain) \($0.code)" } ?? ""). \
+                Coordination is not authorization, so this is the expected shape and is not \
+                a write primitive.
                 """
         )
     }

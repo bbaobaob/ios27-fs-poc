@@ -14,15 +14,22 @@ app container is never inferred to prove write access elsewhere.
 | `readdir` | `readdir()` | listing entries (read permission on the directory) |
 | `open+read` | `open(O_RDONLY)` + `read()` | reading file contents |
 | `open+create` | `open(O_CREAT\|O_EXCL)` | creating a new file in the target directory |
-| `open+write` | `open(O_WRONLY\|O_CREAT\|O_TRUNC)` + `write()` | modifying a file in the target directory |
+| `open+write` | `open(O_WRONLY\|O_CREAT\|O_TRUNC)` + `write()` | creating or overwriting the synthetic file in the target directory |
 | `unlink` | `unlink()` | removing a file |
 | `readlink` | `readlink()` | resolving a symbolic link |
 
 Cell values: `succeeded`, `deniedEPERM`, `deniedEACCES`, `notFound`, `notDirectory`,
-`failedOther`.
+`isDirectory`, `failedOther`, `notAttempted`.
+
+Each text cell is printed as the outcome **and the errno** that produced it (`deniedEPERM EPERM`,
+`failedOther EINVAL`), because the outcome alone does not say which failure was observed. A cell
+with no result at all is printed as `notAttempted`; it is never rendered as a dash that could be
+mistaken for a passing or absent measurement.
 
 Write probes operate on the synthetic file `fsprobe-writetest.tmp` **inside** the target directory,
-verify by read-back, and remove it. They never overwrite a pre-existing file.
+verify by read-back, and remove it. They never overwrite a pre-existing file. Because that file is
+the harness's own and has just been removed, `open+write` creates it rather than modifying one — the
+operation column describes the flags that were executed, not a pre-existing-file edit.
 
 ## Host result — macOS runner (NOT iOS)
 
@@ -58,7 +65,10 @@ Notes on the macOS result:
   keeps `EPERM` and `EACCES` separate: on iOS the sandbox denies with `EPERM`, and conflating the
   two would hide the boundary. This observation is **macOS host behaviour only** and says nothing
   about iOS.
-- `open+read` on a directory reports `failedOther` (`EISDIR`) — expected, recorded, not hidden.
+- `open+read` on a directory reports `isDirectory` (`EISDIR`) — expected, recorded, not hidden. The
+  table above is the output of the build that produced this run and shows the cell value it
+  recorded at the time (`failedOther`, before `EISDIR` had a case of its own); the errno was and is
+  in the JSON either way.
 - `/var/mobile/...` does not exist on macOS, so every cell is `notFound`. Absence is never reported
   as denial.
 
@@ -474,6 +484,12 @@ app explicitly, which requires the service to cooperate. This is recorded as a
 rejected hypothesis with its evidence; the eight candidate services remain
 documented as the attack surface, with no claim that any is reachable.
 
+No connection is ever attempted, so the report prints this section as
+`NOT_ATTEMPTED` and prints the reason as an **SDK availability fact**
+(`API_UNAVAILABLE` on iOS), not as a measurement of this process's reachability.
+The section is printed only when the boundary experiments were requested; a run
+that did not ask the question says nothing about it.
+
 ### What remains viable, and what it showed
 
 `NSFileCoordinator` is a public API whose read and write coordination is performed
@@ -498,6 +514,14 @@ the destination, is the expected shape — not a primitive.
 The verdicts now require the security-relevant effect: bytes actually read, or a
 file actually present at the destination. With that correction the simulator shows
 no violation, which is the honest reading of the evidence.
+
+"Coordination granted, no effect" is its own verdict (`grantedNoEffect`), not a
+refusal: the deputy granted the coordination and the filesystem refused the work
+underneath. Collapsing the two would misattribute the refusal to the deputy. The
+underlying error is recorded per experiment (`errorDomain`/`errorCode`) so "could
+not open" and "could not read" are distinguishable from "read 0 bytes". The table
+above is the prose record of that run; the verdict values it maps onto are
+`permitted` / `grantedNoEffect`.
 
 ### What is unresolved
 

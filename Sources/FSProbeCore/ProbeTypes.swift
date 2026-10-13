@@ -21,8 +21,20 @@ public enum ProbeOutcome: String, Codable, Sendable {
     case deniedEPERM
     /// The operation failed with EACCES — POSIX permission bits (or ACLs), not the sandbox.
     case deniedEACCES
+    /// The operation failed because the target is a directory (EISDIR).
+    ///
+    /// Reading a directory with `open(O_RDONLY)` + `read()` fails with EISDIR for
+    /// any process, authorized or not. It has its own case so that this expected
+    /// structural refusal is never filed as "some other failure" — and never
+    /// attributed to the sandbox, which it says nothing about.
+    case isDirectory
     /// The operation failed with another errno.
     case failedOther
+    /// No attempt was made: the cell has no measurement behind it.
+    ///
+    /// Distinct from every errno-bearing case on purpose. A missing cell is not
+    /// a result, and rendering it as one would present a hole as a finding.
+    case notAttempted
 }
 
 /// The classification of *why* access behaved the way it did.
@@ -70,6 +82,12 @@ public struct ProbeEvidence: Codable, Sendable, Equatable {
     public var readBackMismatchAt: Int?
     /// The resolved symlink target, when readLink succeeded.
     public var linkTarget: String?
+    /// True when the resolved link target was longer than the readlink buffer and
+    /// was therefore truncated.
+    ///
+    /// A truncated target is a partial observation, so it must never be reported
+    /// as if it were the whole path.
+    public var linkTruncated: Bool?
     /// File size reported by stat.
     public var statSize: Int64?
     /// File mode reported by stat (octal string, e.g. "100644").
@@ -90,6 +108,7 @@ public struct ProbeEvidence: Codable, Sendable, Equatable {
         bytesReadBack: Int? = nil,
         readBackMismatchAt: Int? = nil,
         linkTarget: String? = nil,
+        linkTruncated: Bool? = nil,
         statSize: Int64? = nil,
         statModeOctal: String? = nil,
         statIsDirectory: Bool? = nil
@@ -102,6 +121,7 @@ public struct ProbeEvidence: Codable, Sendable, Equatable {
         self.bytesReadBack = bytesReadBack
         self.readBackMismatchAt = readBackMismatchAt
         self.linkTarget = linkTarget
+        self.linkTruncated = linkTruncated
         self.statSize = statSize
         self.statModeOctal = statModeOctal
         self.statIsDirectory = statIsDirectory
