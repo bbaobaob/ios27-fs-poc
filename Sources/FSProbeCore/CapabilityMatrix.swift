@@ -65,6 +65,8 @@ public struct CapabilityMatrix: Sendable {
     public let searchFS: SearchFSProbe.Result?
     /// The Mach privilege ladder, none of which has been tried.
     public let machPrivilege: MachPrivilegeProbe.Result?
+    /// Whether the reachable services actually answer a message.
+    public let xpcReplies: XPCReplyProbe.Result?
 
     /// Results of testing whether a user-granted scope is confined to what the
     /// user picked. Nil until the user grants access.
@@ -95,7 +97,8 @@ public struct CapabilityMatrix: Sendable {
         alternateLookups: AlternateLookupProbe.Result? = nil,
         remainingPrimitives: RemainingPrimitivesProbe.Result? = nil,
         searchFS: SearchFSProbe.Result? = nil,
-        machPrivilege: MachPrivilegeProbe.Result? = nil
+        machPrivilege: MachPrivilegeProbe.Result? = nil,
+        xpcReplies: XPCReplyProbe.Result? = nil
     ) {
         self.results = results
         self.environment = environment
@@ -120,6 +123,7 @@ public struct CapabilityMatrix: Sendable {
         self.remainingPrimitives = remainingPrimitives
         self.searchFS = searchFS
         self.machPrivilege = machPrivilege
+        self.xpcReplies = xpcReplies
     }
 
     /// Platform context captured at run time.

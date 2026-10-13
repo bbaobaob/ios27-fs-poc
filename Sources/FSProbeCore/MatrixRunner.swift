@@ -66,6 +66,7 @@ public struct MatrixRunner: Sendable {
         var remainingPrimitives: RemainingPrimitivesProbe.Result?
         var searchFS: SearchFSProbe.Result?
         var machPrivilege: MachPrivilegeProbe.Result?
+        var xpcReplies: XPCReplyProbe.Result?
         if runBoundaryExperiments {
             // The container is the app's own home; every experiment is scoped to
             // it and to paths it cannot reach.
@@ -152,6 +153,10 @@ public struct MatrixRunner: Sendable {
             // The Mach privilege ladder. A host port or a processor-set task list
             // would be the strongest possible process-isolation violation.
             machPrivilege = MachPrivilegeProbe.probe()
+
+            // Reachability is not the same as answering. This asks the second
+            // question of the services the lookup experiment reached.
+            xpcReplies = XPCReplyProbe.probe()
         }
 
         return CapabilityMatrix(
@@ -175,7 +180,8 @@ public struct MatrixRunner: Sendable {
             alternateLookups: alternateLookups,
             remainingPrimitives: remainingPrimitives,
             searchFS: searchFS,
-            machPrivilege: machPrivilege
+            machPrivilege: machPrivilege,
+            xpcReplies: xpcReplies
         )
     }
 }

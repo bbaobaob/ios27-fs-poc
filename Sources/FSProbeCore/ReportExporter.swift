@@ -484,6 +484,31 @@ public enum ReportExporter {
             }
         }
 
+        if let replies = matrix.xpcReplies {
+            lines.append("")
+            lines.append("Do the reachable services actually answer a message?")
+            for item in replies.probes {
+                let flag = item.isBoundaryViolation ? "  <-- BOUNDARY VIOLATION" : ""
+                lines.append("  [\(item.reply.rawValue)] \(item.serviceName)"
+                    + "  (lookup: \(item.lookupOutcome))\(flag)")
+                if let ms = item.responseMilliseconds {
+                    lines.append("      response: \(ms)ms")
+                }
+                if let reason = item.interruptionReason {
+                    lines.append("      reason: \(reason)")
+                }
+                lines.append("      observed: \(item.observed ?? "no answer")")
+                lines.append("      result: \(item.interpretation)")
+            }
+            if !replies.violations.isEmpty {
+                lines.append("  VIOLATIONS: \(replies.violations.map { $0.serviceName }.joined(separator: ", "))")
+            } else if replies.probes.isEmpty {
+                lines.append("  NOT_ATTEMPTED: no reply probe ran.")
+            } else {
+                lines.append("  no service replied to a caller it had not identified")
+            }
+        }
+
         if let io = matrix.inodeOpen {
             lines.append("")
             lines.append("Open-by-inode (openbyid_np: no path traversal at all):")
@@ -607,6 +632,7 @@ public enum ReportExporter {
         let remainingPrimitives: RemainingPrimitivesProbe.Result?
         let searchFS: SearchFSProbe.Result?
         let machPrivilege: MachPrivilegeProbe.Result?
+        let xpcReplies: XPCReplyProbe.Result?
 
         init(matrix: CapabilityMatrix) {
             self.schema = "fsprobe.capability-matrix.v9"
@@ -633,6 +659,7 @@ public enum ReportExporter {
             self.remainingPrimitives = matrix.remainingPrimitives
             self.searchFS = matrix.searchFS
             self.machPrivilege = matrix.machPrivilege
+            self.xpcReplies = matrix.xpcReplies
         }
     }
 }
