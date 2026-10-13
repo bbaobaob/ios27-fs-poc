@@ -156,12 +156,30 @@ public enum MachShim {
 
     // MARK: - libproc primitives
 
-    /// `proc_pidpath(pid, buffer, size)` — a process's executable path.
+    /// `proc_pidpath(pid, buffer, size)` — a process's executable path, and
+    /// `proc_listallpids(buffer, size)` — the process table.
+    ///
+    /// Bound by name because libproc.h is not visible to a plain `import Darwin`
+    /// on the iOS SDK: the symbols resolve on macOS through the Darwin module but
+    /// not on iOS, where the header is not imported. Binding them here, once, is
+    /// what keeps this working on the platform the research actually targets.
+    #if canImport(Darwin)
+    @_silgen_name("proc_pidpath")
+    private static func cProcPidPath(
+        _ pid: Int32, _ buffer: UnsafeMutableRawPointer, _ size: UInt32
+    ) -> Int32
+
+    @_silgen_name("proc_listallpids")
+    private static func cProcListAllPids(
+        _ buffer: UnsafeMutableRawPointer?, _ size: Int32
+    ) -> Int32
+    #endif
+
     public static func procPidPath(
         _ pid: Int32, _ buffer: UnsafeMutableRawPointer, _ size: UInt32
     ) -> Int32 {
         #if canImport(Darwin)
-        return proc_pidpath(pid, buffer, size)
+        return cProcPidPath(pid, buffer, size)
         #else
         return -1
         #endif
@@ -172,7 +190,7 @@ public enum MachShim {
         _ buffer: UnsafeMutableRawPointer?, _ size: Int32
     ) -> Int32 {
         #if canImport(Darwin)
-        return proc_listallpids(buffer, size)
+        return cProcListAllPids(buffer, size)
         #else
         return -1
         #endif
