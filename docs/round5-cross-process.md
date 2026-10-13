@@ -179,7 +179,101 @@ ordinary write to the platform's own location — running the test anyway would
 report a false finding, so it is withheld and the case reports
 `notApplicable`.
 
-### Consolidated negative results (all measured on iOS 27.0)
+### cfprefsd as a confused deputy: FALSIFIED
+
+**Device:** iPhone12,5, iOS 27.0 build 24A437, run 2026-10-13T12:34:04Z.
+
+| Case | Suite name | Result |
+|---|---|---|
+| control | `com.bbaobaob.fsprobe.deputy-control` | **contained** — `com.bbaobaob.fsprobe.deputy-control.plist` in this container |
+| test | `group.com.example.deputy-probe-target` | **contained** — `group.com.example.deputy-probe-target.plist` in this container |
+
+Both writes reported success and both files appeared inside the app's own
+container, named after the suite. cfprefsd resolves a caller-supplied suite name
+against the caller's own container and treats it as a domain label, not a
+location. The confused-deputy hypothesis — that a caller could name another app's
+group and have a privileged process write there — is falsified for a suite name
+that does not correspond to an existing app group.
+
+The control did its job: it established that a file appearing in this container
+is the normal outcome, without which "no file appeared" would have been
+uninterpretable. It also gated the test case correctly on the Linux verification
+host, where preference storage lives elsewhere and the test would otherwise have
+reported a false escape.
+
+**Remaining uncertainty, stated precisely.** The test used a suite name that does
+not correspond to a real app group. The untested variant is a name that *does*
+correspond to an existing group the app holds no entitlement for. Testing that
+requires either a known-real app-group identifier or a development-signed build
+carrying an app-group entitlement — neither is available in this environment. The
+entitlement check is the likely gate, but that is an inference, not a measurement,
+and it is recorded as such rather than counted as tested.
+
+### Round 6 — untested sandbox operation classes
+
+Status: **implemented, device result outstanding.**
+
+Device: iPhone12,5, iOS 27.0 build 24A437 (stock, not jailbroken).
+
+### Why this direction
+
+Rounds 1–5 tested `file-read*`, `file-write-create`, `file-write-data`,
+`file-link` with a *protected source*, and `file-rename` across the boundary.
+Apple's sandbox authorizes *operations*, not paths, and each of those is a
+separate predicate in a profile. The classes below have never been tested in
+either direction:
+
+| Class | Call | Why it is distinct |
+|---|---|---|
+| `file-mkdir` | `mkdir()` | separate predicate from `file-write-create` |
+| `file-write-symlink` | `symlink()` | earlier experiment read *through* a link inside the container; this creates one *outside* it |
+| `file-mknod` | `mkfifo()` | separate predicate, never tested |
+| `file-link` | `link()` | **reverse direction** — the tested case linked *from* a protected source *into* the container |
+
+The last is the genuine novelty. Linking a file the app owns to a name inside a
+protected directory would give the app a writable inode reachable from a
+protected path: it writes its own file normally, and the change appears at the
+protected location because both names refer to the same inode. That is a write
+primitive outside the container, and it has never been tested in this project.
+
+### Controls, and what they caught
+
+Each operation runs first inside the container, where it must succeed. On the
+physical device this is already established: the earlier hard-link control
+succeeded, so `link()` demonstrably works there.
+
+On the verification host it does not — `link()` between two paths in the same
+temporary directory is refused by the host filesystem. The control therefore
+fails, and the probe reports `controlFailed` rather than `denied`. That is the
+correct behaviour and it is asserted by a test, so it cannot later be "fixed"
+into a false denial: a refusal measured against a broken control says nothing
+about policy.
+
+A second, sharper bug surfaced the same way. The open-flag constants were written
+with Darwin's values (`O_CREAT` = 0x200, `O_TRUNC` = 0x400) and used everywhere.
+On the verification host those are different (`O_CREAT` = 0x40, `O_TRUNC` = 0x200),
+so the link source file was never created and the reverse-direction experiment
+was silently skipped — a test that passed while measuring nothing. The constants
+are now per-platform.
+
+### Expected device result
+
+Every operation refused with EPERM at `/var/mobile/Library` and
+`/var/mobile/Media`, with the control succeeding. `/var/tmp` is excluded
+deliberately: a rename to it returned EXDEV, so it is a different volume and a
+refusal there would not be attributable to policy.
+
+### Excluded for safety, and why
+
+Modification operations on existing protected files (`chmod`, `chown`,
+`truncate`, `setxattr`) are deliberately not tested. A modification that
+succeeded would itself be the harm the mission forbids, and on a non-existent
+path it would be ambiguous, since lookup fails with ENOENT before the MAC check
+runs. Creation operations avoid both problems: the target is a dedicated
+synthetic name in a directory the app cannot write to, so nothing existing is
+touched, and anything created is removed immediately.
+
+## Consolidated negative results (all measured on iOS 27.0)
 
 Filesystem: ancestor ascent, `..` traversal, symlink escape, dirfd-relative
 escape, `link()` from `/usr/lib/dyld`, same-volume `rename()` to the container

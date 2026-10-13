@@ -58,6 +58,7 @@ public struct MatrixRunner: Sendable {
         var machServices: [CrossProcessProbe.MachServiceProbe]?
         var processIntrospection: CrossProcessProbe.IntrospectionReport?
         var preferenceDeputy: PreferenceDeputyProbe.Result?
+        var operationClasses: FileOperationClassProbe.Result?
         if runBoundaryExperiments {
             // The container is the app's own home; every experiment is scoped to
             // it and to paths it cannot reach.
@@ -108,6 +109,11 @@ public struct MatrixRunner: Sendable {
             // caller's behalf. Test whether it resolves a caller-supplied suite
             // name against this container or against a global location.
             preferenceDeputy = PreferenceDeputyProbe.probe(containerPath: container)
+
+            // Sandbox operation classes not previously tested. Each is a
+            // distinct authorization predicate, and the reverse-direction link
+            // case has never been run in either direction before.
+            operationClasses = FileOperationClassProbe.probe(containerPath: container)
         }
 
         return CapabilityMatrix(
@@ -123,7 +129,8 @@ public struct MatrixRunner: Sendable {
             fileCoordinator: fileCoordinator,
             machServices: machServices,
             processIntrospection: processIntrospection,
-            preferenceDeputy: preferenceDeputy
+            preferenceDeputy: preferenceDeputy,
+            operationClasses: operationClasses
         )
     }
 }

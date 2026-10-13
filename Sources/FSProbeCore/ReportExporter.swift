@@ -287,8 +287,7 @@ public enum ReportExporter {
             }
         }
 
-        if let deputy = matrix.preferenceDeputy {
-            lines.append("")
+        if let deputy = matrix.preferenceDeputy {            lines.append("")
             lines.append("cfprefsd as a confused deputy (UserDefaults suite resolution):")
             for experiment in deputy.experiments {
                 let flag = experiment.isBoundaryViolation ? "  <-- BOUNDARY VIOLATION" : ""
@@ -305,6 +304,30 @@ public enum ReportExporter {
                 lines.append("  NOT_ATTEMPTED: no preference experiment ran.")
             } else {
                 lines.append("  every write landed inside this container, as the policy predicts")
+            }
+        }
+
+        if let classes = matrix.operationClasses {
+            lines.append("")
+            lines.append("Untested sandbox operation classes:")
+            for experiment in classes.experiments {
+                let flag = experiment.isBoundaryViolation ? "  <-- BOUNDARY VIOLATION" : ""
+                lines.append("  [\(experiment.outcome.rawValue)] \(experiment.id)\(flag)")
+                lines.append("      \(experiment.operation)  args: \(experiment.arguments)")
+                if let errno = experiment.errnoName {
+                    lines.append("      errno: \(errno)")
+                }
+                if let observed = experiment.observed {
+                    lines.append("      observed: \(observed)")
+                }
+                lines.append("      result: \(experiment.interpretation)")
+            }
+            if !classes.violations.isEmpty {
+                lines.append("  VIOLATIONS: \(classes.violations.map { $0.id }.joined(separator: ", "))")
+            } else if classes.experiments.isEmpty {
+                lines.append("  NOT_ATTEMPTED: no operation-class experiment ran.")
+            } else {
+                lines.append("  no operation class succeeded where the policy predicts refusal")
             }
         }
 
@@ -423,6 +446,7 @@ public enum ReportExporter {
         let machServices: [CrossProcessProbe.MachServiceProbe]?
         let processIntrospection: CrossProcessProbe.IntrospectionReport?
         let preferenceDeputy: PreferenceDeputyProbe.Result?
+        let operationClasses: FileOperationClassProbe.Result?
 
         init(matrix: CapabilityMatrix) {
             self.schema = "fsprobe.capability-matrix.v9"
@@ -441,6 +465,7 @@ public enum ReportExporter {
             self.machServices = matrix.machServices
             self.processIntrospection = matrix.processIntrospection
             self.preferenceDeputy = matrix.preferenceDeputy
+            self.operationClasses = matrix.operationClasses
         }
     }
 }

@@ -49,6 +49,8 @@ public struct CapabilityMatrix: Sendable {
     public let processIntrospection: CrossProcessProbe.IntrospectionReport?
     /// cfprefsd tested as a confused deputy through UserDefaults.
     public let preferenceDeputy: PreferenceDeputyProbe.Result?
+    /// Sandbox operation classes not previously tested.
+    public let operationClasses: FileOperationClassProbe.Result?
 
     /// Results of testing whether a user-granted scope is confined to what the
     /// user picked. Nil until the user grants access.
@@ -71,7 +73,8 @@ public struct CapabilityMatrix: Sendable {
         fileCoordinator: XPCProbe.CoordinatorResult? = nil,
         machServices: [CrossProcessProbe.MachServiceProbe]? = nil,
         processIntrospection: CrossProcessProbe.IntrospectionReport? = nil,
-        preferenceDeputy: PreferenceDeputyProbe.Result? = nil
+        preferenceDeputy: PreferenceDeputyProbe.Result? = nil,
+        operationClasses: FileOperationClassProbe.Result? = nil
     ) {
         self.results = results
         self.environment = environment
@@ -88,6 +91,7 @@ public struct CapabilityMatrix: Sendable {
         self.machServices = machServices
         self.processIntrospection = processIntrospection
         self.preferenceDeputy = preferenceDeputy
+        self.operationClasses = operationClasses
     }
 
     /// Platform context captured at run time.
