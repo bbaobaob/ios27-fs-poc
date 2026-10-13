@@ -142,6 +142,63 @@ public enum MachShim {
         #endif
     }
 
+    /// `task_get_special_port(task, which, &port)` — a named special port.
+    ///
+    /// Bound by name: it lives in the Mach headers, which are not visible to a
+    /// plain `import Darwin` on the iOS SDK.
+    #if canImport(Darwin)
+    @_silgen_name("task_get_special_port")
+    private static func cTaskGetSpecialPort(
+        _ task: MachPort, _ which: Int32, _ port: UnsafeMutablePointer<MachPort>
+    ) -> Int32
+
+    @_silgen_name("task_threads")
+    private static func cTaskThreads(
+        _ task: MachPort, _ list: UnsafeMutablePointer<MachPort>,
+        _ count: UnsafeMutablePointer<Int32>
+    ) -> Int32
+
+    @_silgen_name("task_info")
+    private static func cTaskInfo(
+        _ task: MachPort, _ flavor: Int32,
+        _ info: UnsafeMutableRawPointer, _ count: UnsafeMutablePointer<UInt32>
+    ) -> Int32
+    #endif
+
+    public static func taskGetSpecialPort(
+        _ task: MachPort, _ which: Int32, _ port: UnsafeMutablePointer<MachPort>
+    ) -> Int32 {
+        #if canImport(Darwin)
+        return cTaskGetSpecialPort(task, which, port)
+        #else
+        return -1
+        #endif
+    }
+
+    /// `task_threads(task, &list, &count)` — the threads of a task.
+    public static func taskThreads(
+        _ task: MachPort, _ list: UnsafeMutablePointer<MachPort>,
+        _ count: UnsafeMutablePointer<Int32>
+    ) -> Int32 {
+        #if canImport(Darwin)
+        return cTaskThreads(task, list, count)
+        #else
+        return -1
+        #endif
+    }
+
+    /// `task_info(task, flavor, &info, &count)` — information about a task.
+    public static func taskInfo(
+        _ task: MachPort, _ flavor: Int32,
+        _ info: UnsafeMutableRawPointer, _ count: UnsafeMutablePointer<UInt32>
+    ) -> Int32 {
+        #if canImport(Darwin)
+        return cTaskInfo(task, flavor, info, count)
+        #else
+        return -1
+        #endif
+    }
+
     /// `mach_error_string(kr)` — the platform's own name for a kern_return_t.
     public static func machErrorString(_ kr: Int32) -> String {
         #if canImport(Darwin)

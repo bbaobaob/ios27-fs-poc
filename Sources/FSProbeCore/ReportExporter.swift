@@ -463,6 +463,27 @@ public enum ReportExporter {
             }
         }
 
+        if let ladder = matrix.machPrivilege {
+            lines.append("")
+            lines.append("The Mach privilege ladder:")
+            for rung in ladder.rungs {
+                let flag = rung.isBoundaryViolation ? "  <-- BOUNDARY VIOLATION" : ""
+                lines.append("  [\(rung.outcome.rawValue)] \(rung.id)\(flag)")
+                lines.append("      \(rung.operation)  args: \(rung.arguments)")
+                if let rv = rung.returnValue { lines.append("      return: \(rv)") }
+                if let err = rung.errorName { lines.append("      error: \(err)") }
+                lines.append("      observed: \(rung.observed ?? "no answer")")
+                lines.append("      result: \(rung.interpretation)")
+            }
+            if !ladder.violations.isEmpty {
+                lines.append("  VIOLATIONS: \(ladder.violations.map { $0.id }.joined(separator: ", "))")
+            } else if ladder.rungs.isEmpty {
+                lines.append("  NOT_ATTEMPTED: no Mach-privilege rung ran.")
+            } else {
+                lines.append("  no rung of the privilege ladder was reachable")
+            }
+        }
+
         if let io = matrix.inodeOpen {
             lines.append("")
             lines.append("Open-by-inode (openbyid_np: no path traversal at all):")
@@ -585,6 +606,7 @@ public enum ReportExporter {
         let alternateLookups: AlternateLookupProbe.Result?
         let remainingPrimitives: RemainingPrimitivesProbe.Result?
         let searchFS: SearchFSProbe.Result?
+        let machPrivilege: MachPrivilegeProbe.Result?
 
         init(matrix: CapabilityMatrix) {
             self.schema = "fsprobe.capability-matrix.v9"
@@ -610,6 +632,7 @@ public enum ReportExporter {
             self.alternateLookups = matrix.alternateLookups
             self.remainingPrimitives = matrix.remainingPrimitives
             self.searchFS = matrix.searchFS
+            self.machPrivilege = matrix.machPrivilege
         }
     }
 }

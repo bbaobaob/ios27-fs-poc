@@ -65,6 +65,7 @@ public struct MatrixRunner: Sendable {
         var alternateLookups: AlternateLookupProbe.Result?
         var remainingPrimitives: RemainingPrimitivesProbe.Result?
         var searchFS: SearchFSProbe.Result?
+        var machPrivilege: MachPrivilegeProbe.Result?
         if runBoundaryExperiments {
             // The container is the app's own home; every experiment is scoped to
             // it and to paths it cannot reach.
@@ -147,6 +148,10 @@ public struct MatrixRunner: Sendable {
             // A volume-wide name search, which is a different VFS operation from
             // reading a directory and has never been tested.
             searchFS = SearchFSProbe.probe(containerPath: container)
+
+            // The Mach privilege ladder. A host port or a processor-set task list
+            // would be the strongest possible process-isolation violation.
+            machPrivilege = MachPrivilegeProbe.probe()
         }
 
         return CapabilityMatrix(
@@ -169,7 +174,8 @@ public struct MatrixRunner: Sendable {
             foundationSurface: foundationSurface,
             alternateLookups: alternateLookups,
             remainingPrimitives: remainingPrimitives,
-            searchFS: searchFS
+            searchFS: searchFS,
+            machPrivilege: machPrivilege
         )
     }
 }
