@@ -154,48 +154,54 @@ public enum MetadataReadProbe {
     ]
 
     // MARK: - Resolved symbols
+    //
+    // These are bound by symbol name rather than resolved through dlsym. The
+    // dlsym route was tried first and crashed the macOS test runner with SIGABRT:
+    // a symbol address obtained that way is not verifiably a function pointer, and
+    // calling it when it is not one aborts the process. Binding by name lets the
+    // linker resolve the real symbol and the compiler type-check the signature,
+    // which is the pattern the operation-class module already uses successfully.
+    //
+    // None of these exist on the non-Darwin verification host, so the whole
+    // section is gated and the host reports the experiments as unattempted rather
+    // than fabricating results.
 
-    private typealias GetxattrFn = @convention(c) (
-        UnsafePointer<CChar>, UnsafePointer<CChar>, UnsafeMutableRawPointer?,
-        Int, UInt32, UInt32
+    #if canImport(Darwin)
+
+    @_silgen_name("getxattr")
+    private static func sGetxattr(
+        _ path: UnsafePointer<CChar>, _ name: UnsafePointer<CChar>,
+        _ value: UnsafeMutableRawPointer?, _ size: Int,
+        _ position: UInt32, _ options: UInt32
     ) -> Int
 
-    private typealias ListxattrFn = @convention(c) (
-        UnsafePointer<CChar>, UnsafeMutableRawPointer?, Int, UInt32
+    @_silgen_name("listxattr")
+    private static func sListxattr(
+        _ path: UnsafePointer<CChar>, _ namebuf: UnsafeMutableRawPointer?,
+        _ size: Int, _ options: UInt32
     ) -> Int
 
-    private typealias GetattrlistFn = @convention(c) (
-        UnsafePointer<CChar>, UnsafeMutableRawPointer, UnsafeMutableRawPointer?,
-        Int, UInt32
+    @_silgen_name("getattrlist")
+    private static func sGetattrlist(
+        _ path: UnsafePointer<CChar>, _ alist: UnsafeMutableRawPointer,
+        _ attributeBuffer: UnsafeMutableRawPointer?, _ bufferSize: Int,
+        _ options: UInt32
     ) -> Int
 
-    private typealias StatfsFn = @convention(c) (
-        UnsafePointer<CChar>, UnsafeMutableRawPointer
+    @_silgen_name("statfs64")
+    private static func sStatfs64(
+        _ path: UnsafePointer<CChar>, _ buf: UnsafeMutableRawPointer
     ) -> Int
 
-    private static func getxattrFn() -> GetxattrFn? {
-        guard let sym = POSIXShim.lookupSymbol("getxattr") else { return nil }
-        return unsafeBitCast(sym, to: GetxattrFn.self)
-    }
+    /// True when the platform provides these calls.
+    private static var symbolsAvailable: Bool { true }
 
-    private static func listxattrFn() -> ListxattrFn? {
-        guard let sym = POSIXShim.lookupSymbol("listxattr") else { return nil }
-        return unsafeBitCast(sym, to: ListxattrFn.self)
-    }
+    #else
 
-    private static func getattrlistFn() -> GetattrlistFn? {
-        guard let sym = POSIXShim.lookupSymbol("getattrlist") else { return nil }
-        return unsafeBitCast(sym, to: GetattrlistFn.self)
-    }
+    /// None of these exist here, so no measurement is made.
+    private static var symbolsAvailable: Bool { false }
 
-    private static func statfsFn() -> StatfsFn? {
-        // The 64-bit variant is the one that matters on a 64-bit device.
-        guard let sym = POSIXShim.lookupSymbol("statfs64") else {
-            guard let fallback = POSIXShim.lookupSymbol("statfs") else { return nil }
-            return unsafeBitCast(fallback, to: StatfsFn.self)
-        }
-        return unsafeBitCast(sym, to: StatfsFn.self)
-    }
+    #endif
 
     /// A generic attribute name. Chosen to probe the authorization check, not to
     /// extract private data.
@@ -207,9 +213,17 @@ public enum MetadataReadProbe {
     private static let attrCmnName: UInt32 = 0x00000001
 
     /// Buffer sizes. Generous, so a struct-size mismatch cannot overflow.
+    ///
+    /// The statfs buffer has to be sized against the kernel's struct, not a
+    /// guess. `struct statfs64` on Darwin carries two PATH_MAX (1024-byte) arrays
+    /// for the mount-on and mount-from names plus the fixed fields, which comes to
+    /// roughly 2160 bytes. A 2048-byte buffer overflowed the heap and aborted the
+    /// macOS test runner with SIGABRT, non-deterministically -- one test passed and
+    /// a later one crashed, which is the signature of heap corruption rather than a
+    /// logic error. 8192 leaves ample headroom.
     private static let attrlistBufferSize = 64
     private static let attributeBufferSize = 4096
-    private static let statfsBufferSize = 2048
+    private static let statfsBufferSize = 8192
 
     public static func probe(containerPath: String) -> Result {
         var experiments: [Experiment] = []
@@ -233,13 +247,13 @@ public enum MetadataReadProbe {
     // MARK: - Cases
 
     private static func getxattrCase(directory: String, documents: String) -> Experiment {
-        guard let fn = getxattrFn() else {
+        guard symbolsAvailable else {
             return unavailable("getxattr-\(directory)", "getxattr(path, name, NULL, 0, 0, 0)",
                               directory)
         }
-        let controlRC = callGetxattr(fn, documents, probeAttributeName)
+        let controlRC = callGetxattr(documents, probeAttributeName)
         let control = classify(controlRC)
-        let rc = callGetxattr(fn, directory, probeAttributeName)
+        let rc = callGetxattr(directory, probeAttributeName)
         return makeExperiment(
             id: "getxattr-\(directory)",
             mechanism: """
@@ -276,12 +290,12 @@ public enum MetadataReadProbe {
     }
 
     private static func listxattrCase(directory: String, documents: String) -> Experiment {
-        guard let fn = listxattrFn() else {
+        guard symbolsAvailable else {
             return unavailable("listxattr-\(directory)", "listxattr(path, NULL, 0, 0)", directory)
         }
-        let controlRC = callListxattr(fn, documents)
+        let controlRC = callListxattr(documents)
         let control = classify(controlRC)
-        let rc = callListxattr(fn, directory)
+        let rc = callListxattr(directory)
         return makeExperiment(
             id: "listxattr-\(directory)",
             mechanism: """
@@ -314,13 +328,13 @@ public enum MetadataReadProbe {
     }
 
     private static func getattrlistCase(directory: String, documents: String) -> Experiment {
-        guard let fn = getattrlistFn() else {
+        guard symbolsAvailable else {
             return unavailable("getattrlist-\(directory)",
                               "getattrlist(path, &attrlist, buf, size, 0)", directory)
         }
-        let controlRC = callGetattrlist(fn, documents)
+        let controlRC = callGetattrlist(documents)
         let control = classify(controlRC)
-        let rc = callGetattrlist(fn, directory)
+        let rc = callGetattrlist(directory)
         return makeExperiment(
             id: "getattrlist-\(directory)",
             mechanism: """
@@ -354,12 +368,12 @@ public enum MetadataReadProbe {
     }
 
     private static func statfsCase(directory: String, documents: String) -> Experiment {
-        guard let fn = statfsFn() else {
+        guard symbolsAvailable else {
             return unavailable("statfs-\(directory)", "statfs64(path, &buf)", directory)
         }
-        let controlRC = callStatfs(fn, documents)
+        let controlRC = callStatfs(documents)
         let control = classify(controlRC)
-        let rc = callStatfs(fn, directory)
+        let rc = callStatfs(directory)
         return makeExperiment(
             id: "statfs-\(directory)",
             mechanism: """
@@ -392,26 +406,41 @@ public enum MetadataReadProbe {
     }
 
     // MARK: - Raw calls
+    //
+    // Each call is gated to Darwin, where the symbols are bound by name. On the
+    // verification host these functions are unreachable, because every case is
+    // short-circuited by `symbolsAvailable` before reaching them.
 
     private static func callGetxattr(
-        _ fn: GetxattrFn, _ path: String, _ name: String
+        _ path: String, _ name: String
     ) -> Int {
+        #if canImport(Darwin)
         setErrno(0)
         return path.withCString { p in
             name.withCString { n in
-                fn(p, n, nil, 0, 0, 0)
+                sGetxattr(p, n, nil, 0, 0, 0)
             }
         }
+        #else
+        setErrno(ENOSYS)
+        return -1
+        #endif
     }
 
-    private static func callListxattr(_ fn: ListxattrFn, _ path: String) -> Int {
+    private static func callListxattr(_ path: String) -> Int {
+        #if canImport(Darwin)
         setErrno(0)
         return path.withCString { p in
-            fn(p, nil, 0, 0)
+            sListxattr(p, nil, 0, 0)
         }
+        #else
+        setErrno(ENOSYS)
+        return -1
+        #endif
     }
 
-    private static func callGetattrlist(_ fn: GetattrlistFn, _ path: String) -> Int {
+    private static func callGetattrlist(_ path: String) -> Int {
+        #if canImport(Darwin)
         let attrlist = UnsafeMutableRawPointer.allocate(
             byteCount: attrlistBufferSize, alignment: 8
         )
@@ -434,11 +463,16 @@ public enum MetadataReadProbe {
 
         setErrno(0)
         return path.withCString { p in
-            fn(p, attrlist, attributeBuffer, attributeBufferSize, 0)
+            sGetattrlist(p, attrlist, attributeBuffer, attributeBufferSize, 0)
         }
+        #else
+        setErrno(ENOSYS)
+        return -1
+        #endif
     }
 
-    private static func callStatfs(_ fn: StatfsFn, _ path: String) -> Int {
+    private static func callStatfs(_ path: String) -> Int {
+        #if canImport(Darwin)
         let buffer = UnsafeMutableRawPointer.allocate(
             byteCount: statfsBufferSize, alignment: 8
         )
@@ -446,8 +480,12 @@ public enum MetadataReadProbe {
         memset(buffer, 0, statfsBufferSize)
         setErrno(0)
         return path.withCString { p in
-            fn(p, buffer)
+            sStatfs64(p, buffer)
         }
+        #else
+        setErrno(ENOSYS)
+        return -1
+        #endif
     }
 
     // MARK: - Classification
