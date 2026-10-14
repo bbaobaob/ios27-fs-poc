@@ -214,7 +214,11 @@ public enum IPCSurfaceProbe {
         // Nothing is sent on the port. It is invalidated immediately: the
         // experiment is about whether the name resolves, not about using it.
         CFMessagePortInvalidate(port)
-        Unmanaged<CFMessagePort>.fromOpaque(port).release()
+        // CFMessagePortCreateRemote returns an UNRETAINED reference on success,
+        // so the caller owns it and must release it exactly once.
+        Unmanaged<CFMessagePort>.fromOpaque(
+            Unmanaged.passUnretained(port).toOpaque()
+        ).release()
 
         return Mechanism(
             id: id, mechanism: mechanism,
