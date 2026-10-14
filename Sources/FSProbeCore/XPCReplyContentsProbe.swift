@@ -149,7 +149,7 @@ public enum XPCReplyContentsProbe {
         let semaphore = DispatchSemaphore(value: 0)
         let lock = NSLock()
         var outcome: Outcome = .silent
-        var keyNames: [String] = []
+        var replyKeys: [String] = []
 
         guard let connection = XPCShim.createConnection(name) else {
             return Reply(
@@ -181,7 +181,7 @@ public enum XPCReplyContentsProbe {
                 outcome = .interrupted
             } else if XPCShim.type(of: replyEvent) == XPCShim.dictionaryType {
                 let names = keyNames(of: replyEvent)
-                keyNames = names
+                replyKeys = names
                 if names.isEmpty {
                     outcome = .emptyReply
                 } else if Set(names).isSubset(of: transportKeys) {
@@ -199,7 +199,7 @@ public enum XPCReplyContentsProbe {
 
         lock.lock()
         let finalOutcome: Outcome = waited == .timedOut ? .silent : outcome
-        let finalKeys = keyNames
+        let finalKeys = replyKeys
         lock.unlock()
 
         XPCShim.cancel(connection)
@@ -252,7 +252,7 @@ public enum XPCReplyContentsProbe {
         var names: [String] = []
         // xpc_dictionary_apply is the documented way to walk a dictionary. The
         // value is deliberately not read: only the key is captured.
-        XPCShim.dictionaryApply(dictionary) { key, _ in
+        XPCShim.dictionaryApply(dictionary) { (key, _) -> Bool in
             names.append(String(cString: key))
             return true
         }
