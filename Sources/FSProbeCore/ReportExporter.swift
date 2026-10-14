@@ -528,6 +528,31 @@ public enum ReportExporter {
             }
         }
 
+        if let host = matrix.hostPort {
+            lines.append("")
+            lines.append("Is an obtainable host port actually usable?")
+            lines.append("  host port obtained: \(host.hostPortObtained)")
+            lines.append("  host port is impotent (every use refused with a validity error): \(host.hostPortIsImpotent)")
+            for rung in host.rungs {
+                let flag = rung.isBoundaryViolation ? "  <-- BOUNDARY VIOLATION" : ""
+                lines.append("  [\(rung.outcome.rawValue)] \(rung.id)\(flag)")
+                lines.append("      \(rung.operation)")
+                if let rv = rung.returnValue { lines.append("      return: \(rv)") }
+                if let err = rung.errorName { lines.append("      error: \(err)") }
+                lines.append("      observed: \(rung.observed ?? "no answer")")
+                lines.append("      result: \(rung.interpretation)")
+            }
+            if !host.violations.isEmpty {
+                lines.append("  VIOLATIONS: \(host.violations.map { $0.id }.joined(separator: ", "))")
+            } else if host.hostPortObtained && host.hostPortIsImpotent {
+                lines.append("  the host port is obtainable but grants nothing: the earlier violation was an artifact")
+            } else if !host.hostPortObtained {
+                lines.append("  no host port was obtained")
+            } else {
+                lines.append("  the host port was refused by policy on every use")
+            }
+        }
+
         if let io = matrix.inodeOpen {
             lines.append("")
             lines.append("Open-by-inode (openbyid_np: no path traversal at all):")
@@ -653,6 +678,7 @@ public enum ReportExporter {
         let machPrivilege: MachPrivilegeProbe.Result?
         let xpcReplies: XPCReplyProbe.Result?
         let ipcSurface: IPCSurfaceProbe.Result?
+        let hostPort: HostPortProbe.Result?
 
         init(matrix: CapabilityMatrix) {
             self.schema = "fsprobe.capability-matrix.v9"
@@ -681,6 +707,7 @@ public enum ReportExporter {
             self.machPrivilege = matrix.machPrivilege
             self.xpcReplies = matrix.xpcReplies
             self.ipcSurface = matrix.ipcSurface
+            self.hostPort = matrix.hostPort
         }
     }
 }

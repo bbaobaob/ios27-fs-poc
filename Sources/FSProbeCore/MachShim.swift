@@ -199,6 +199,61 @@ public enum MachShim {
         #endif
     }
 
+    // The host-port rungs. Bound by name because the Mach headers are not visible
+    // to a plain `import Darwin` on the iOS SDK.
+    #if canImport(Darwin)
+    @_silgen_name("host_get_special_port")
+    private static func cHostGetSpecialPort(
+        _ host: MachPort, _ flavor: Int32, _ port: UnsafeMutablePointer<MachPort>
+    ) -> Int32
+
+    @_silgen_name("host_processor_set_priv")
+    private static func cHostProcessorSetPriv(
+        _ host: MachPort, _ pset: UnsafeMutablePointer<MachPort>
+    ) -> Int32
+
+    @_silgen_name("host_statistics")
+    private static func cHostStatistics(
+        _ host: MachPort, _ flavor: Int32,
+        _ info: UnsafeMutableRawPointer, _ count: UnsafeMutablePointer<UInt32>
+    ) -> Int32
+    #endif
+
+    /// `host_get_special_port(host, flavor, &port)` — a named system port obtained
+    /// through a host port.
+    public static func hostGetSpecialPort(
+        _ host: MachPort, _ flavor: Int32, _ port: UnsafeMutablePointer<MachPort>
+    ) -> Int32 {
+        #if canImport(Darwin)
+        return cHostGetSpecialPort(host, flavor, port)
+        #else
+        return -1
+        #endif
+    }
+
+    /// `host_processor_set_priv(host, &pset)` — the privileged processor set.
+    public static func hostProcessorSetPriv(
+        _ host: MachPort, _ pset: UnsafeMutablePointer<MachPort>
+    ) -> Int32 {
+        #if canImport(Darwin)
+        return cHostProcessorSetPriv(host, pset)
+        #else
+        return -1
+        #endif
+    }
+
+    /// `host_statistics(host, flavor, &info, &count)` — host-wide statistics.
+    public static func hostStatistics(
+        _ host: MachPort, _ flavor: Int32,
+        _ info: UnsafeMutableRawPointer, _ count: UnsafeMutablePointer<UInt32>
+    ) -> Int32 {
+        #if canImport(Darwin)
+        return cHostStatistics(host, flavor, info, count)
+        #else
+        return -1
+        #endif
+    }
+
     /// `mach_error_string(kr)` — the platform's own name for a kern_return_t.
     public static func machErrorString(_ kr: Int32) -> String {
         #if canImport(Darwin)
