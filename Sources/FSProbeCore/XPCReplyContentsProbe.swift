@@ -204,7 +204,7 @@ public enum XPCReplyContentsProbe {
 
         XPCShim.cancel(connection)
 
-        let keyList = keyList
+        let keyList = finalKeys.joined(separator: ", ")
         let interpretation: String
         switch finalOutcome {
         case .repliedWithKeys:
