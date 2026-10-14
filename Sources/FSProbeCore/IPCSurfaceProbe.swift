@@ -213,12 +213,18 @@ public enum IPCSurfaceProbe {
 
         // Nothing is sent on the port. It is invalidated immediately: the
         // experiment is about whether the name resolves, not about using it.
+        //
+        // Ownership, precisely: CFMessagePortCreateRemote returns an UNRETAINED
+        // reference on success. The caller does NOT own it and must not release
+        // it. An earlier version of this code released it, via
+        // passUnretained(...).toOpaque() followed by fromOpaque(...).release(),
+        // which is a release the caller does not hold -- and it crashed the macOS
+        // test runner with SIGSEGV in this exact function.
+        //
+        // Swift's own import already handles this correctly: the function is
+        // imported as returning CFMessagePort?, so the value arrives usable with
+        // no manual reference counting at all. Doing it by hand was the mistake.
         CFMessagePortInvalidate(port)
-        // CFMessagePortCreateRemote returns an UNRETAINED reference on success,
-        // so the caller owns it and must release it exactly once.
-        Unmanaged<CFMessagePort>.fromOpaque(
-            Unmanaged.passUnretained(port).toOpaque()
-        ).release()
 
         return Mechanism(
             id: id, mechanism: mechanism,
