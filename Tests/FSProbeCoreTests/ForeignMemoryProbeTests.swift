@@ -75,6 +75,25 @@ final class ForeignMemoryProbeTests: XCTestCase {
         XCTAssertTrue(result.violations.allSatisfy { $0.outcome == .permitted })
     }
 
+    func testRepeatedProbesGiveConsistentResults() {
+        // The defect this guards against: the probe page was allocated once as a
+        // static and released in a defer, so the second and later calls read an
+        // address that had already been deallocated. The self-control failed, the
+        // foreign reads were gated off behind it, and every run after the first
+        // silently reported "uninterpretable" for a question it never asked.
+        //
+        // A harness that measures correctly exactly once is not a measuring
+        // instrument. Two consecutive runs must produce the same shape.
+        let first = ForeignMemoryProbe.probe()
+        let second = ForeignMemoryProbe.probe()
+        XCTAssertEqual(first.reads.count, second.reads.count,
+                       "a second probe run produced a different number of reads")
+        XCTAssertEqual(first.reads.map { $0.id }, second.reads.map { $0.id },
+                       "a second probe run produced different rungs")
+        XCTAssertEqual(first.reads.map { $0.outcome }, second.reads.map { $0.outcome },
+                       "a second probe run produced different outcomes")
+    }
+
     func testViolationListMatchesPerReadFlags() {
         let result = ForeignMemoryProbe.probe()
         let flagged = Set(result.reads.filter { $0.isBoundaryViolation }.map { $0.id })

@@ -149,31 +149,38 @@ public enum ForeignMemoryProbe {
     /// minimum that answers the question.
     private static let probeSize: Int = 4096
 
-    /// A mapped page in this app's own address space, allocated once and released
-    /// when the probe finishes. Zero when allocation failed, in which case the
-    /// control reports the reason rather than silently probing an unmapped address.
-    private static let probeAddress: UInt64 = {
+    /// A mapped page in this app's own address space, or 0 when allocation failed.
+    ///
+    /// Allocated per probe() call rather than once as a static. The earlier
+    /// version allocated it as a static and released it in a defer, which meant
+    /// the second and later calls read an address that had already been
+    /// deallocated: the self-control failed, the foreign reads were gated off
+    /// behind it, and the experiment silently reported "uninterpretable" on every
+    /// run after the first. That is the same class of defect as reading address
+    /// zero -- a control that cannot pass, hiding a question that was never asked.
+    private static func allocateProbePage() -> UInt64 {
         var address: UInt64 = 0
         let kr = MachShim.vmAllocate(MachShim.taskSelf, &address, probeSize)
         return kr == 0 ? address : 0
-    }()
+    }
 
-    /// Release the probe page. Called once, after every read is done.
-    private static func releaseProbePage() {
-        guard probeAddress != 0 else { return }
-        _ = MachShim.vmDeallocate(MachShim.taskSelf, MachPort(probeAddress), probeSize)
+    /// Release the probe page. Called once, after every read in one probe() run.
+    private static func releaseProbePage(_ address: UInt64) {
+        guard address != 0 else { return }
+        _ = MachShim.vmDeallocate(MachShim.taskSelf, MachPort(address), probeSize)
     }
 
     public static func probe() -> Result {
         guard MachShim.available else {
             return Result(reads: [unavailable()], violations: [])
         }
-        defer { releaseProbePage() }
+        let probeAddress = allocateProbePage()
+        defer { releaseProbePage(probeAddress) }
 
         var reads: [Read] = []
 
         // Control: read this app's own memory. Must succeed.
-        reads.append(selfRead())
+        reads.append(selfRead(address: probeAddress))
         let controlOK = reads.first?.outcome == .permitted
 
         guard controlOK else {
@@ -183,15 +190,17 @@ public enum ForeignMemoryProbe {
         // The target: launchd, pid 1. The most privileged process on the system.
         reads.append(foreignRead(
             id: "mach-vm-read-launchd",
-            operation: "mach_vm_read(task, 0, 4096, &data, &count)",
+            operation: "mach_vm_read(task, <page>, 4096, &data, &count)",
             pid: 1,
-            targetLabel: "launchd (pid 1)"
+            targetLabel: "launchd (pid 1)",
+            address: probeAddress
         ))
         reads.append(foreignReadOverwrite(
             id: "vm-read-overwrite-launchd",
-            operation: "vm_read_overwrite(task, 0, 4096, buf, &count)",
+            operation: "vm_read_overwrite(task, <page>, 4096, buf, &count)",
             pid: 1,
-            targetLabel: "launchd (pid 1)"
+            targetLabel: "launchd (pid 1)",
+            address: probeAddress
         ))
 
         let violations = reads.filter { $0.isBoundaryViolation }
@@ -200,7 +209,7 @@ public enum ForeignMemoryProbe {
 
     // MARK: - Reads
 
-    private static func selfRead() -> Read {
+    private static func selfRead(address: UInt64) -> Read {
         let id = "mach-vm-read-self"
         let operation = "mach_vm_read(mach_task_self_, 0, 4096, &data, &count)"
         let mechanism = """
@@ -211,7 +220,7 @@ public enum ForeignMemoryProbe {
 
         var data: MachPort = 0
         var count: UInt32 = 0
-        let kr = MachShim.machVMRead(MachShim.taskSelf, probeAddress, probeSize, &data, &count)
+        let kr = MachShim.machVMRead(MachShim.taskSelf, address, probeSize, &data, &count)
         if kr == 0 && count > 0 {
             // `data` is a vm_address_t naming a vm-allocated buffer, not a send
             // right. Releasing it with mach_port_deallocate would be wrong -- the
@@ -255,7 +264,8 @@ public enum ForeignMemoryProbe {
         id: String,
         operation: String,
         pid: Int32,
-        targetLabel: String
+        targetLabel: String,
+        address: UInt64
     ) -> Read {
         let mechanism = """
             Reading ANOTHER process's memory. With a task port for it, this is \
@@ -291,7 +301,7 @@ public enum ForeignMemoryProbe {
 
         var data: MachPort = 0
         var count: UInt32 = 0
-        let kr = MachShim.machVMRead(task, probeAddress, probeSize, &data, &count)
+        let kr = MachShim.machVMRead(task, address, probeSize, &data, &count)
         if kr == 0 && count > 0 {
             // Discard the data immediately, as a vm buffer. It is never printed,
             // stored, or transmitted: the experiment records only that the read
@@ -337,7 +347,8 @@ public enum ForeignMemoryProbe {
         id: String,
         operation: String,
         pid: Int32,
-        targetLabel: String
+        targetLabel: String,
+        address: UInt64
     ) -> Read {
         let mechanism = """
             The same read into a caller-supplied buffer. A separate predicate from \
@@ -372,7 +383,7 @@ public enum ForeignMemoryProbe {
         defer { buffer.deallocate() }
         var count: UInt32 = 0
         let kr = MachShim.vmReadOverwrite(
-            task, probeAddress, probeSize, buffer, &count
+            task, address, probeSize, buffer, &count
         )
         if kr == 0 && count > 0 {
             return Read(
