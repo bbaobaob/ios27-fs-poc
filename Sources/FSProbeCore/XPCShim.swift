@@ -50,15 +50,6 @@ public enum XPCShim {
     /// prevents linking it by name. Resolving it through dlsym answers the
     /// question the SDK availability cannot: does the code exist in the runtime,
     /// and if so, what does the operating system do when it is called?
-    #if canImport(Darwin)
-    /// The factory's C signature. Private, because the public surface is the
-    /// `createConnection` function below rather than the function value itself:
-    /// a public property cannot expose a private (or internal) function type,
-    /// and leaking the raw C signature to callers buys nothing.
-    private typealias CreateMachServiceFn = @convention(c) (
-        UnsafePointer<CChar>, DispatchQueue?, UInt64
-    ) -> XPCConnection?
-
     /// Create a connection to a named mach service, or nil when the factory is
     /// not present in this runtime.
     ///
@@ -66,13 +57,32 @@ public enum XPCShim {
     /// marks the underlying function unavailable, which prevents linking it, so
     /// it is resolved at runtime instead -- and whether it resolves is itself a
     /// fact the caller needs, which is what `connectionFactoryAvailable` reports.
+    ///
+    /// The return is an optional on every platform, uniformly, because the
+    /// factory's own return nullability is not knowable from here -- the header is
+    /// unavailable. Declaring it optional everywhere means a caller writes the
+    /// same guard-let on the device and on the host, and cannot accidentally rely
+    /// on a non-null guarantee that only one branch actually provides.
     public static func createConnection(_ name: String) -> XPCConnection? {
+        #if canImport(Darwin)
         guard let sym = POSIXShim.lookupSymbol("xpc_connection_create_mach_service") else {
             return nil
         }
         let factory = unsafeBitCast(sym, to: CreateMachServiceFn.self)
         return name.withCString { factory($0, nil, 0) }
+        #else
+        return nil
+        #endif
     }
+
+    #if canImport(Darwin)
+    /// The factory's C signature. Private, because the public surface is the
+    /// `createConnection` function rather than the function value itself: a public
+    /// property cannot expose a private (or internal) function type, and leaking
+    /// the raw C signature to callers buys nothing.
+    private typealias CreateMachServiceFn = @convention(c) (
+        UnsafePointer<CChar>, DispatchQueue?, UInt64
+    ) -> XPCConnection?
 
     /// True when the connection factory resolves in this process. On iOS this is
     /// the interesting question: the SDK forbids linking it, but the code may
@@ -81,7 +91,6 @@ public enum XPCShim {
         POSIXShim.lookupSymbol("xpc_connection_create_mach_service") != nil
     }
     #else
-    public static func createConnection(_ name: String) -> XPCConnection? { nil }
     public static var connectionFactoryAvailable: Bool { false }
     #endif
 
