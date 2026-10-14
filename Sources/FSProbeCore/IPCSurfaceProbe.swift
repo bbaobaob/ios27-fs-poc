@@ -191,9 +191,7 @@ public enum IPCSurfaceProbe {
             mach-lookup gate.
             """
 
-        let port = entry.name.withCString { name in
-            CFMessagePortCreateRemote(nil, name as CFString)
-        }
+        let port = CFMessagePortCreateRemote(nil, entry.name as CFString)
 
         guard let port else {
             return Mechanism(
@@ -243,6 +241,19 @@ public enum IPCSurfaceProbe {
 
     #endif
 
+    #if canImport(Darwin)
+
+    @_silgen_name("notify_register_dispatch")
+    private static func cNotifyRegisterDispatch(
+        _ name: UnsafePointer<CChar>, _ token: UnsafeMutablePointer<Int32>,
+        _ queue: DispatchQueue?, _ handler: @escaping @convention(block) (Int32) -> Void
+    ) -> UInt32
+
+    @_silgen_name("notify_cancel")
+    private static func cNotifyCancel(_ token: Int32) -> UInt32
+
+    #endif
+
     private static func darwinNotifyCase() -> Mechanism {
         let id = "darwin-notification"
         let mechanism = """
@@ -256,10 +267,10 @@ public enum IPCSurfaceProbe {
         let name = "com.bbaobaob.fsprobe.deputy-probe.notify"
         var token: Int32 = 0
         let rc = name.withCString { cName in
-            notify_register_dispatch(cName, &token) { _ in }
+            cNotifyRegisterDispatch(cName, &token, nil) { _ in }
         }
         if rc == 0 {
-            notify_cancel(token)
+            cNotifyCancel(token)
             return Mechanism(
                 id: id, mechanism: mechanism,
                 operation: "notify_register_dispatch(name, &token, queue)",
