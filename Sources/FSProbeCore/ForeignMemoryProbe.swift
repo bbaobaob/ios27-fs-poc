@@ -161,7 +161,14 @@ public enum ForeignMemoryProbe {
     private static func allocateProbePage() -> UInt64 {
         var address: UInt64 = 0
         let kr = MachShim.vmAllocate(MachShim.taskSelf, &address, probeSize)
-        return kr == 0 ? address : 0
+        guard kr == 0, address != 0 else { return 0 }
+        // Touch the page. An allocated-but-untouched page has no physical backing
+        // on some kernels, and mach_vm_read on it fails with an address error --
+        // which would make the self-control fail for a reason that has nothing to
+        // do with the boundary under study.
+        let pointer = UnsafeMutableRawPointer(bitPattern: UInt(address))
+        pointer?.storeBytes(of: UInt8(0), toByteOffset: 0, as: UInt8.self)
+        return address
     }
 
     /// Release the probe page. Called once, after every read in one probe() run.
@@ -183,7 +190,21 @@ public enum ForeignMemoryProbe {
         reads.append(selfRead(address: probeAddress))
         let controlOK = reads.first?.outcome == .permitted
 
-        guard controlOK else {
+        // The foreign reads run whether or not the control passed. An earlier
+        // version returned early when the control failed, which meant a broken
+        // control silently removed the experiment from the report -- the question
+        // disappeared rather than being reported as uninterpretable. Both are
+        // recorded now: the control's own outcome, and the foreign reads' outcome
+        // marked as gated behind it.
+        if !controlOK {
+            reads.append(gatedBehindControl(
+                id: "mach-vm-read-launchd",
+                operation: "mach_vm_read(task, <page>, 4096, &data, &count)"
+            ))
+            reads.append(gatedBehindControl(
+                id: "vm-read-overwrite-launchd",
+                operation: "vm_read_overwrite(task, <page>, 4096, buf, &count)"
+            ))
             return Result(reads: reads, violations: [])
         }
 
@@ -242,6 +263,7 @@ public enum ForeignMemoryProbe {
             )
         }
 
+        let addressState = address == 0 ? "unallocated" : "allocated"
         return Read(
             id: id, mechanism: mechanism, operation: operation,
             target: "self",
@@ -251,7 +273,10 @@ public enum ForeignMemoryProbe {
             returnValue: "kern_return_t \(kr)",
             errorName: MachShim.machErrorString(kr),
             bytesRead: nil,
-            observed: "even self-read failed",
+            observed: """
+                even self-read failed (probe address \(addressState), \
+                size \(probeSize))
+                """,
             interpretation: """
                 The control failed, so a refusal on another process is \
                 uninterpretable: it could mean the policy denies it, or that the \
@@ -449,6 +474,32 @@ public enum ForeignMemoryProbe {
             bytesRead: nil,
             observed: "refused with \(MachShim.machErrorString(kr))",
             interpretation: outcome == .deniedByValidity ? validityMeaning : policyMeaning
+        )
+    }
+
+    /// A read that could not run because the self-control did not pass.
+    ///
+    /// Recorded rather than omitted: a control that fails should remove the
+    /// conclusion, not the question. The report then shows that the experiment was
+    /// attempted and why its result is uninterpretable.
+    private static func gatedBehindControl(id: String, operation: String) -> Read {
+        Read(
+            id: id,
+            mechanism: """
+                Reading ANOTHER process's memory -- the strongest possible                 process-isolation violation, and the endpoint the whole Mach ladder                 has been climbing toward.
+                """,
+            operation: operation,
+            target: "launchd (pid 1)",
+            expected: """
+                Denied. An ordinary app must not read another process's memory.
+            """,
+            expectedDenied: true,
+            outcome: .controlFailed,
+            returnValue: nil, errorName: nil, bytesRead: nil,
+            observed: "the self-control did not pass, so this read was gated",
+            interpretation: """
+                NOT ATTEMPTED for interpretation: the self-control did not pass, so                 a refusal here could not be told apart from a broken call. The                 experiment is recorded as attempted and uninterpretable rather than                 dropped.
+            """
         )
     }
 
