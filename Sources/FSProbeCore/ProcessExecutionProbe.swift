@@ -273,7 +273,9 @@ public enum ProcessExecutionProbe {
 
         if let stream {
             // Reap it immediately: the command does nothing and the pipe is closed.
-            _ = pclose(stream)
+            #if canImport(Darwin)
+            _ = pclose(UnsafeMutablePointer<FILE>(stream))
+            #endif
             return Spawn(
                 id: id, mechanism: mechanism, operation: operation,
                 arguments: arguments,
@@ -337,11 +339,15 @@ public enum ProcessExecutionProbe {
         #endif
     }
 
+    /// `popen` returns a `FILE *`, which is not a type Swift exposes on every
+    /// platform this builds for. The stream is therefore handled as an opaque
+    /// pointer and cast back where it is used, which keeps the platform seam in
+    /// one place rather than spreading `#if` through the case logic.
     private static func runPopen(_ command: String) -> OpaquePointer? {
         #if canImport(Darwin)
         return command.withCString { commandPath in
             "r".withCString { mode in
-                popen(commandPath, mode)
+                OpaquePointer(popen(commandPath, mode))
             }
         }
         #else
