@@ -74,6 +74,13 @@ public enum XPCReplyProbe {
         public let responseMilliseconds: Int?
         /// The platform's own error description, when it gave one.
         public let interruptionReason: String?
+        /// The shape of the reply -- its type and key count, never its values.
+        ///
+        /// A reply the service produced and a reply XPC produced on its behalf
+        /// look identical from the outside. Recording the shape is what lets the
+        /// two be told apart later, and recording only the shape keeps anything
+        /// sensitive out of the log.
+        public let replyShape: String?
         /// What was observed.
         public let observed: String?
         /// What the observation means.
@@ -86,6 +93,7 @@ public enum XPCReplyProbe {
             reply: Reply,
             responseMilliseconds: Int?,
             interruptionReason: String?,
+            replyShape: String?,
             observed: String?,
             interpretation: String
         ) {
@@ -95,6 +103,7 @@ public enum XPCReplyProbe {
             self.reply = reply
             self.responseMilliseconds = responseMilliseconds
             self.interruptionReason = interruptionReason
+            self.replyShape = replyShape
             self.observed = observed
             self.interpretation = interpretation
         }
@@ -165,6 +174,7 @@ public enum XPCReplyProbe {
                 serviceName: target.name, rationale: target.rationale,
                 lookupOutcome: target.lookup, reply: .notAttempted,
                 responseMilliseconds: nil, interruptionReason: nil,
+                replyShape: nil,
                 observed: nil,
                 interpretation: """
                     NOT ATTEMPTED: XPC is not present on this platform, so no \
@@ -192,6 +202,7 @@ public enum XPCReplyProbe {
         let lock = NSLock()
         var reply: Reply = .silent
         var reason: String?
+        var replyShape: String?
 
         // The connection factory is resolved at runtime, as in the mach-lookup
         // experiment: the SDK marks it unavailable, which prevents linking it by
@@ -201,7 +212,7 @@ public enum XPCReplyProbe {
             return Probe(
                 serviceName: name, rationale: rationale, lookupOutcome: lookup,
                 reply: .notAttempted, responseMilliseconds: nil,
-                interruptionReason: nil, observed: nil,
+                interruptionReason: nil, replyShape: nil, observed: nil,
                 interpretation: """
                     NOT ATTEMPTED: the XPC connection factory is not present in \
                     this runtime, so no message could be sent.
@@ -237,6 +248,11 @@ public enum XPCReplyProbe {
                 reason = XPCShim.errorDescription(replyEvent)
             } else {
                 reply = .replied
+                // Record what the reply contains -- its type and key count, never
+                // its values. A reply the SERVICE produced and a reply XPC
+                // produced on its behalf look identical from the outside, and the
+                // only way to tell them apart later is to have recorded the shape.
+                replyShape = describeShape(replyEvent)
             }
             semaphore.signal()
         }
@@ -283,6 +299,7 @@ public enum XPCReplyProbe {
             reply: finalReply,
             responseMilliseconds: finalReply == .silent ? nil : elapsed,
             interruptionReason: finalReason,
+            replyShape: finalReply == .replied ? replyShape : nil,
             observed: finalReply == .silent
                 ? "no reply within \(Int(timeout))s"
                 : (finalReason ?? "a reply arrived"),
@@ -294,6 +311,21 @@ public enum XPCReplyProbe {
     // XPCShim. Binding them here as well would make the compiler share one
     // implementation across two different signatures and fail the build -- the
     // same mistake the Mach shim already fixed once.
+
+    /// Describe an xpc object's shape without revealing its contents.
+    ///
+    /// The count and the type are enough to tell a service's reply from XPC's own
+    /// bookkeeping, and nothing sensitive is read in order to produce them.
+    private static func describeShape(_ object: XPCObject) -> String {
+        let type = xpc_get_type(object)
+        if type == XPC_TYPE_DICTIONARY {
+            return "dictionary with \(xpc_dictionary_get_count(object)) key(s)"
+        }
+        if type == XPC_TYPE_ERROR {
+            return "error object"
+        }
+        return "non-dictionary object"
+    }
 
     #endif
 }

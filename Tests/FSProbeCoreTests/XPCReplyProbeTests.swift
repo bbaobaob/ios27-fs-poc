@@ -26,7 +26,7 @@ final class XPCReplyProbeTests: XCTestCase {
             let item = XPCReplyProbe.Probe(
                 serviceName: "com.example.test", rationale: "r",
                 lookupOutcome: lookup, reply: reply,
-                responseMilliseconds: nil, interruptionReason: nil,
+                responseMilliseconds: nil, interruptionReason: nil, replyShape: nil,
                 observed: "obs", interpretation: "interp"
             )
             XCTAssertEqual(item.isBoundaryViolation, shouldFlag,

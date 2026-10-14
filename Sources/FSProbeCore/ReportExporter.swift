@@ -497,6 +497,9 @@ public enum ReportExporter {
                 if let reason = item.interruptionReason {
                     lines.append("      reason: \(reason)")
                 }
+                if let shape = item.replyShape {
+                    lines.append("      reply shape: \(shape)")
+                }
                 lines.append("      observed: \(item.observed ?? "no answer")")
                 lines.append("      result: \(item.interpretation)")
             }
