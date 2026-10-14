@@ -34,8 +34,8 @@ import Darwin
 /// The XPC object and connection types, spelled portably so this file compiles
 /// everywhere. On Darwin they come from the XPC module; elsewhere they are
 /// stand-ins that are never used, because every function below is gated.
-public typealias XPCObject = XPCObject
-public typealias XPCConnection = XPCConnection
+public typealias XPCObject = xpc_object_t
+public typealias XPCConnection = xpc_connection_t
 #else
 public typealias XPCObject = AnyObject
 public typealias XPCConnection = AnyObject

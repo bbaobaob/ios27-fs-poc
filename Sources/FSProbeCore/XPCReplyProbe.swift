@@ -196,7 +196,7 @@ public enum XPCReplyProbe {
         // The connection factory is resolved at runtime, as in the mach-lookup
         // experiment: the SDK marks it unavailable, which prevents linking it by
         // name but says nothing about whether it exists in the runtime.
-        guard let create = resolveCreateMachService() else {
+        guard let create = XPCShim.connectionFactory else {
             return Probe(
                 serviceName: name, rationale: rationale, lookupOutcome: lookup,
                 reply: .notAttempted, responseMilliseconds: nil,
