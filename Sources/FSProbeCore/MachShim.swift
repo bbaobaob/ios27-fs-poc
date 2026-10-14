@@ -254,6 +254,40 @@ public enum MachShim {
         #endif
     }
 
+    // The processor-set rungs. Bound by name because the Mach headers are not
+    // visible to a plain `import Darwin` on the iOS SDK.
+    #if canImport(Darwin)
+    @_silgen_name("processor_set_default")
+    private static func cProcessorSetDefault(_ pset: UnsafeMutablePointer<MachPort>) -> Int32
+
+    @_silgen_name("processor_set_tasks")
+    private static func cProcessorSetTasks(
+        _ pset: MachPort, _ tasks: UnsafeMutablePointer<MachPort>,
+        _ count: UnsafeMutablePointer<Int32>
+    ) -> Int32
+    #endif
+
+    /// `processor_set_default(&pset)` — the default processor set, no privilege.
+    public static func processorSetDefault(_ pset: UnsafeMutablePointer<MachPort>) -> Int32 {
+        #if canImport(Darwin)
+        return cProcessorSetDefault(pset)
+        #else
+        return -1
+        #endif
+    }
+
+    /// `processor_set_tasks(pset, &tasks, &count)` — every task in a processor set.
+    public static func processorSetTasks(
+        _ pset: MachPort, _ tasks: UnsafeMutablePointer<MachPort>,
+        _ count: UnsafeMutablePointer<Int32>
+    ) -> Int32 {
+        #if canImport(Darwin)
+        return cProcessorSetTasks(pset, tasks, count)
+        #else
+        return -1
+        #endif
+    }
+
     /// `mach_error_string(kr)` — the platform's own name for a kern_return_t.
     public static func machErrorString(_ kr: Int32) -> String {
         #if canImport(Darwin)

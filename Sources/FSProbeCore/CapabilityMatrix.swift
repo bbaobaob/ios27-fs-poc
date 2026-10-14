@@ -71,6 +71,8 @@ public struct CapabilityMatrix: Sendable {
     public let ipcSurface: IPCSurfaceProbe.Result?
     /// Whether an obtainable host port is actually usable.
     public let hostPort: HostPortProbe.Result?
+    /// Whether an ordinary app can enumerate every task on the device.
+    public let processorSets: ProcessorSetProbe.Result?
 
     /// Results of testing whether a user-granted scope is confined to what the
     /// user picked. Nil until the user grants access.
@@ -104,7 +106,8 @@ public struct CapabilityMatrix: Sendable {
         machPrivilege: MachPrivilegeProbe.Result? = nil,
         xpcReplies: XPCReplyProbe.Result? = nil,
         ipcSurface: IPCSurfaceProbe.Result? = nil,
-        hostPort: HostPortProbe.Result? = nil
+        hostPort: HostPortProbe.Result? = nil,
+        processorSets: ProcessorSetProbe.Result? = nil
     ) {
         self.results = results
         self.environment = environment
@@ -132,6 +135,7 @@ public struct CapabilityMatrix: Sendable {
         self.xpcReplies = xpcReplies
         self.ipcSurface = ipcSurface
         self.hostPort = hostPort
+        self.processorSets = processorSets
     }
 
     /// Platform context captured at run time.

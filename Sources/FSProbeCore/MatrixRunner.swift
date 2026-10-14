@@ -69,6 +69,7 @@ public struct MatrixRunner: Sendable {
         var xpcReplies: XPCReplyProbe.Result?
         var ipcSurface: IPCSurfaceProbe.Result?
         var hostPort: HostPortProbe.Result?
+        var processorSets: ProcessorSetProbe.Result?
         if runBoundaryExperiments {
             // The container is the app's own home; every experiment is scoped to
             // it and to paths it cannot reach.
@@ -166,6 +167,9 @@ public struct MatrixRunner: Sendable {
             // An obtainable host port is not the same as a usable one. This asks
             // the question that decides whether the earlier violation was real.
             hostPort = HostPortProbe.probe()
+
+            // The call that would list every task on the device.
+            processorSets = ProcessorSetProbe.probe()
         }
 
         return CapabilityMatrix(
@@ -192,7 +196,8 @@ public struct MatrixRunner: Sendable {
             machPrivilege: machPrivilege,
             xpcReplies: xpcReplies,
             ipcSurface: ipcSurface,
-            hostPort: hostPort
+            hostPort: hostPort,
+            processorSets: processorSets
         )
     }
 }

@@ -553,6 +553,28 @@ public enum ReportExporter {
             }
         }
 
+        if let psets = matrix.processorSets {
+            lines.append("")
+            lines.append("Can an ordinary app enumerate every task on the device?")
+            for rung in psets.rungs {
+                let flag = rung.isBoundaryViolation ? "  <-- BOUNDARY VIOLATION" : ""
+                lines.append("  [\(rung.outcome.rawValue)] \(rung.id)\(flag)")
+                lines.append("      \(rung.operation)")
+                if let rv = rung.returnValue { lines.append("      return: \(rv)") }
+                if let err = rung.errorName { lines.append("      error: \(err)") }
+                if let count = rung.taskCount { lines.append("      tasks: \(count)") }
+                lines.append("      observed: \(rung.observed ?? "no answer")")
+                lines.append("      result: \(rung.interpretation)")
+            }
+            if !psets.violations.isEmpty {
+                lines.append("  VIOLATIONS: \(psets.violations.map { $0.id }.joined(separator: ", "))")
+            } else if psets.rungs.isEmpty {
+                lines.append("  NOT_ATTEMPTED: no processor-set rung ran.")
+            } else {
+                lines.append("  no processor set yielded a task list")
+            }
+        }
+
         if let io = matrix.inodeOpen {
             lines.append("")
             lines.append("Open-by-inode (openbyid_np: no path traversal at all):")
@@ -679,6 +701,7 @@ public enum ReportExporter {
         let xpcReplies: XPCReplyProbe.Result?
         let ipcSurface: IPCSurfaceProbe.Result?
         let hostPort: HostPortProbe.Result?
+        let processorSets: ProcessorSetProbe.Result?
 
         init(matrix: CapabilityMatrix) {
             self.schema = "fsprobe.capability-matrix.v9"
@@ -708,6 +731,7 @@ public enum ReportExporter {
             self.xpcReplies = matrix.xpcReplies
             self.ipcSurface = matrix.ipcSurface
             self.hostPort = matrix.hostPort
+            self.processorSets = matrix.processorSets
         }
     }
 }
