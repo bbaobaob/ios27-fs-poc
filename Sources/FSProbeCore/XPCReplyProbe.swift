@@ -222,19 +222,20 @@ public enum XPCReplyProbe {
         }
 
         // An interruption means the service rejected the connection or died.
-        xpc_connection_set_event_handler(connection) { event in
+        // Its description string is the platform's own explanation.
+        XPCShim.setEventHandler(connection) { event in
             lock.lock()
             defer { lock.unlock() }
-            if xpc_get_type(event) == XPC_TYPE_ERROR {
+            if XPCShim.isError(event) {
                 reply = .interrupted
-                reason = xpcDescription(event)
+                reason = XPCShim.errorDescription(event)
             } else {
                 // Any non-error event is a message arriving, which is the reply.
                 reply = .replied
             }
             semaphore.signal()
         }
-        xpc_connection_resume(connection)
+        XPCShim.resume(connection)
 
         // An empty message: no path, no identifier, no resource reference. This
         // asks only whether the service answers a caller it has not identified.
@@ -242,9 +243,9 @@ public enum XPCReplyProbe {
         cSendMessageWithReply(connection, message, nil) { replyEvent in
             lock.lock()
             defer { lock.unlock() }
-            if xpc_get_type(replyEvent) == XPC_TYPE_ERROR {
+            if XPCShim.isError(replyEvent) {
                 reply = .interrupted
-                reason = xpcDescription(replyEvent)
+                reason = XPCShim.errorDescription(replyEvent)
             } else {
                 reply = .replied
             }
@@ -259,7 +260,7 @@ public enum XPCReplyProbe {
         let finalReason = reason
         lock.unlock()
 
-        xpc_connection_cancel(connection)
+        XPCShim.cancel(connection)
 
         let interpretation: String
         switch finalReply {
@@ -300,46 +301,10 @@ public enum XPCReplyProbe {
         )
     }
 
-    private typealias CreateMachServiceFn = @convention(c) (
-        UnsafePointer<CChar>, DispatchQueue?, UInt64
-    ) -> xpc_connection_t?
-
-    private static func resolveCreateMachService() -> CreateMachServiceFn? {
-        guard let sym = POSIXShim.lookupSymbol("xpc_connection_create_mach_service") else {
-            return nil
-        }
-        return unsafeBitCast(sym, to: CreateMachServiceFn.self)
-    }
-
-    // Bound by name with the full signature. The imported
-    // xpc_connection_send_message_with_reply takes a reply QUEUE as its third
-    // argument, which the two-argument call site does not supply.
-    @_silgen_name("xpc_connection_send_message_with_reply")
-    private static func cSendMessageWithReply(
-        _ connection: xpc_connection_t,
-        _ message: xpc_object_t,
-        _ replyQueue: DispatchQueue?,
-        _ handler: @escaping @convention(block) (xpc_object_t) -> Void
-    )
-
-    // Bound by name with the full signature, because the imported
-    // xpc_dictionary_get_string takes position and options arguments that the
-    // two-argument call site does not supply.
-    @_silgen_name("xpc_dictionary_get_string")
-    private static func errorDescriptionString(
-        _ dictionary: xpc_object_t, _ key: UnsafePointer<CChar>,
-        _ position: Int, _ options: UInt32
-    ) -> UnsafePointer<CChar>?
-
-    private static func xpcDescription(_ object: xpc_object_t) -> String? {
-        let structured = "XPCErrorDescription".withCString { key in
-            errorDescriptionString(object, key, 0, 0).map { String(cString: $0) }
-        }
-        if let structured, !structured.isEmpty { return structured }
-        let ptr = xpc_copy_description(object)
-        defer { free(ptr) }
-        return String(cString: ptr)
-    }
+    // The XPC connection factory and the error-description helper are owned by
+    // XPCShim. Binding them here as well would make the compiler share one
+    // implementation across two different signatures and fail the build -- the
+    // same mistake the Mach shim already fixed once.
 
     #endif
 }

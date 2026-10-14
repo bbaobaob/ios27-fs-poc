@@ -207,18 +207,18 @@ public enum CrossProcessProbe {
         // An interruption means launchd refused the lookup, or the service died.
         // Its description string is the platform's own explanation, which is far
         // more informative than the mere fact of refusal.
-        xpc_connection_set_event_handler(connection) { event in
+        XPCShim.setEventHandler(connection) { event in
             lock.lock()
             defer { lock.unlock() }
-            if xpc_get_type(event) == XPC_TYPE_ERROR {
+            if XPCShim.isError(event) {
                 reachability = .refused
-                refusalReason = xpcDescription(event)
+                refusalReason = XPCShim.errorDescription(event)
             } else {
                 reachability = .reachable
             }
             semaphore.signal()
         }
-        xpc_connection_resume(connection)
+        XPCShim.resume(connection)
 
         let waited = semaphore.wait(timeout: .now() + timeout)
         let elapsed = Int(Date().timeIntervalSince(started) * 1000)
@@ -235,7 +235,7 @@ public enum CrossProcessProbe {
         let finalReason = refusalReason
         lock.unlock()
 
-        xpc_connection_cancel(connection)
+        XPCShim.cancel(connection)
 
         return MachServiceProbe(
             serviceName: name, rationale: rationale,
@@ -246,11 +246,6 @@ public enum CrossProcessProbe {
         )
     }
 
-    @_silgen_name("xpc_dictionary_get_string")
-    private static func errorDescriptionString(
-        _ dictionary: xpc_object_t, _ key: UnsafePointer<CChar>
-    ) -> UnsafePointer<CChar>?
-
     /// The key under which XPC stores an error's human-readable description.
     ///
     /// The literal was confirmed empirically rather than guessed: rendering a
@@ -260,21 +255,7 @@ public enum CrossProcessProbe {
     /// symbol, and the surrounding connection API is SDK-unavailable.
     private static let xpcErrorDescriptionKey = "XPCErrorDescription"
 
-    /// The platform's own one-line reason for a refused connection.
-    ///
-    /// The structured description is preferred: the full `xpc_copy_description`
-    /// dump is five lines of dictionary rendering per refusal, which buries the
-    /// actual reason and makes the report unreadable. The dump is kept only as a
-    /// fallback for a platform that does not populate the structured key.
-    private static func xpcDescription(_ object: xpc_object_t) -> String? {
-        let structured = xpcErrorDescriptionKey.withCString { key in
-            errorDescriptionString(object, key).map { String(cString: $0) }
-        }
-        if let structured, !structured.isEmpty { return structured }
-        let ptr = xpc_copy_description(object)
-        defer { free(ptr) }
-        return String(cString: ptr)
-    }
+    // The XPC error description is produced by XPCShim, which owns the binding.
 
     #else
 
