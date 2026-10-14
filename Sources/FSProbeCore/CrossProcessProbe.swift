@@ -157,7 +157,7 @@ public enum CrossProcessProbe {
     ) -> MachServiceProbe {
         let started = Date()
 
-        guard connectionFactoryAvailable else {
+        guard XPCShim.connectionFactoryAvailable else {
             // The symbol is absent from this runtime, so nothing was attempted.
             return MachServiceProbe(
                 serviceName: name, rationale: rationale,
