@@ -51,26 +51,39 @@ public enum XPCShim {
     /// question the SDK availability cannot: does the code exist in the runtime,
     /// and if so, what does the operating system do when it is called?
     #if canImport(Darwin)
-    /// The factory's C signature. Internal rather than private, because a public
-    /// property cannot expose a private type.
-    typealias CreateMachServiceFn = @convention(c) (
+    /// The factory's C signature. Private, because the public surface is the
+    /// `createConnection` function below rather than the function value itself:
+    /// a public property cannot expose a private (or internal) function type,
+    /// and leaking the raw C signature to callers buys nothing.
+    private typealias CreateMachServiceFn = @convention(c) (
         UnsafePointer<CChar>, DispatchQueue?, UInt64
     ) -> XPCConnection?
 
-    public static var connectionFactory: CreateMachServiceFn? {
+    /// Create a connection to a named mach service, or nil when the factory is
+    /// not present in this runtime.
+    ///
+    /// This is the whole public surface for reaching a service by name. The SDK
+    /// marks the underlying function unavailable, which prevents linking it, so
+    /// it is resolved at runtime instead -- and whether it resolves is itself a
+    /// fact the caller needs, which is what `connectionFactoryAvailable` reports.
+    public static func createConnection(_ name: String) -> XPCConnection? {
         guard let sym = POSIXShim.lookupSymbol("xpc_connection_create_mach_service") else {
             return nil
         }
-        return unsafeBitCast(sym, to: CreateMachServiceFn.self)
+        let factory = unsafeBitCast(sym, to: CreateMachServiceFn.self)
+        return name.withCString { factory($0, nil, 0) }
+    }
+
+    /// True when the connection factory resolves in this process. On iOS this is
+    /// the interesting question: the SDK forbids linking it, but the code may
+    /// still be present in libxpc.
+    public static var connectionFactoryAvailable: Bool {
+        POSIXShim.lookupSymbol("xpc_connection_create_mach_service") != nil
     }
     #else
-    public static var connectionFactory: Any? { nil }
+    public static func createConnection(_ name: String) -> XPCConnection? { nil }
+    public static var connectionFactoryAvailable: Bool { false }
     #endif
-
-    /// True when the connection factory resolves in this process.
-    public static var connectionFactoryAvailable: Bool {
-        connectionFactory != nil
-    }
 
     /// `xpc_connection_set_event_handler(connection, handler)`.
     public static func setEventHandler(

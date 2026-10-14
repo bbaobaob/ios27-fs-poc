@@ -134,32 +134,14 @@ public enum CrossProcessProbe {
 
     #if canImport(Darwin)
 
-    /// Resolve the connection factory at runtime.
-    ///
-    /// The SDK marks `xpc_connection_create_mach_service` unavailable, so it
-    /// cannot be linked by name. Resolving it through dlsym answers the question
-    /// the SDK availability cannot: does the code exist in the runtime, and if so,
-    /// what does the operating system do when it is actually called?
-    ///
-    /// The C signature is `xpc_connection_t xpc_connection_create_mach_service(
-    /// const char *name, dispatch_queue_t targetq, uint64_t flags)`. The return is
-    /// declared optional because the exact imported nullability is not visible
-    /// here; the ABI is identical either way.
-    private typealias CreateMachServiceFn = @convention(c) (
-        UnsafePointer<CChar>, DispatchQueue?, UInt64
-    ) -> xpc_connection_t?
-
-    private static func resolveCreateMachService() -> CreateMachServiceFn? {
-        guard let sym = POSIXShim.lookupSymbol("xpc_connection_create_mach_service") else {
-            return nil
-        }
-        return unsafeBitCast(sym, to: CreateMachServiceFn.self)
-    }
+    // The connection factory is owned by XPCShim. Binding it here as well would
+    // make the compiler share one implementation across two different signatures
+    // and fail the build -- the same mistake the Mach shim already fixed once.
 
     /// True when the connection factory resolves in this process. On iOS this is
     /// the interesting question: the SDK forbids linking it, but the code may
     /// still be present in libxpc.
-    public static var machSymbolResolved: Bool { resolveCreateMachService() != nil }
+    public static var machSymbolResolved: Bool { XPCShim.connectionFactoryAvailable }
 
     /// True when this platform can attempt the mach-lookup experiment at all.
     public static var machReachabilityAvailable: Bool { true }
@@ -175,7 +157,8 @@ public enum CrossProcessProbe {
     ) -> MachServiceProbe {
         let started = Date()
 
-        guard let create = resolveCreateMachService() else {
+        let connection = XPCShim.createConnection(name)
+        guard let connection else {
             // The symbol is absent from this runtime, so nothing was attempted.
             return MachServiceProbe(
                 serviceName: name, rationale: rationale,
@@ -191,9 +174,6 @@ public enum CrossProcessProbe {
         var reachability: MachReachability = .noResponse
         var refusalReason: String?
 
-        let connection = name.withCString { cName in
-            create(cName, nil, 0)
-        }
         guard let connection else {
             return MachServiceProbe(
                 serviceName: name, rationale: rationale,

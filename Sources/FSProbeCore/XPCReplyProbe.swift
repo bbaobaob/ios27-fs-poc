@@ -196,7 +196,8 @@ public enum XPCReplyProbe {
         // The connection factory is resolved at runtime, as in the mach-lookup
         // experiment: the SDK marks it unavailable, which prevents linking it by
         // name but says nothing about whether it exists in the runtime.
-        guard let create = XPCShim.connectionFactory else {
+        let connection = XPCShim.createConnection(name)
+        guard let connection else {
             return Probe(
                 serviceName: name, rationale: rationale, lookupOutcome: lookup,
                 reply: .notAttempted, responseMilliseconds: nil,
@@ -208,18 +209,6 @@ public enum XPCReplyProbe {
             )
         }
 
-        let connection = name.withCString { cName in create(cName, nil, 0) }
-        guard let connection else {
-            return Probe(
-                serviceName: name, rationale: rationale, lookupOutcome: lookup,
-                reply: .notCreated, responseMilliseconds: nil,
-                interruptionReason: nil, observed: nil,
-                interpretation: """
-                    NOT ATTEMPTED: the connection factory returned no object, so \
-                    no message could be sent.
-                    """
-            )
-        }
 
         // An interruption means the service rejected the connection or died.
         // Its description string is the platform's own explanation.
