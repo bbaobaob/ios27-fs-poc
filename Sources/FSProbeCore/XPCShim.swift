@@ -175,12 +175,21 @@ public enum XPCShim {
         #endif
     }
 
+    /// The number of keys in a dictionary.
+    public static func dictionaryCount(_ dictionary: XPCObject) -> Int {
+        #if canImport(Darwin)
+        return Int(xpc_dictionary_get_count(dictionary))
+        #else
+        return 0
+        #endif
+    }
+
     /// Walk a dictionary, calling `body` with each key and value.
     ///
     /// Exposed so a caller can capture key NAMES without reading values, which is
     /// the discipline the reply-contents probe depends on.
     public static func dictionaryApply(
-        _ dictionary: XPCConnection,
+        _ dictionary: XPCObject,
         _ body: @escaping @convention(block) (UnsafePointer<CChar>, XPCObject) -> Bool
     ) {
         #if canImport(Darwin)
@@ -188,29 +197,48 @@ public enum XPCShim {
         #endif
     }
 
+    // xpc_get_type and XPC_TYPE_DICTIONARY are bound by name rather than used
+    // through the import, because their imported signatures differ between the
+    // macOS and iOS SDKs -- xpc_type_t is not an xpc_object_t, and comparing the
+    // two directly fails to compile on the iOS SDK. Binding by name with an
+    // explicit OpaquePointer return makes the comparison well defined everywhere.
+    #if canImport(Darwin)
+    @_silgen_name("xpc_get_type")
+    private static func cXpcGetType(_ object: XPCObject) -> OpaquePointer
+
+    @_silgen_name("_xpc_type_dictionary")
+    private static var dictionaryTypeSymbol: OpaquePointer
+    #endif
+
     /// The XPC type of an object, exposed so a caller can tell a dictionary from
     /// an error without treating either as data.
-    public static func type(of object: XPCObject) -> XPCObject? {
+    public static func type(of object: XPCObject) -> OpaquePointer? {
         #if canImport(Darwin)
-        return xpc_get_type(object)
+        return cXpcGetType(object)
         #else
         return nil
         #endif
     }
 
-    /// The XPC_TYPE_DICTIONARY singleton.
-    public static var dictionaryType: XPCObject? {
+    /// The XPC_TYPE_DICTIONARY singleton, resolved at runtime.
+    public static var dictionaryType: OpaquePointer? {
         #if canImport(Darwin)
-        return XPC_TYPE_DICTIONARY
+        return dictionaryTypeSymbol
         #else
         return nil
         #endif
     }
+
+    // XPC_TYPE_ERROR, bound by name for the same reason as the dictionary type:
+    #if canImport(Darwin)
+    @_silgen_name("_xpc_type_error")
+    private static var errorTypeSymbol: OpaquePointer
+    #endif
 
     /// True when `object` is an XPC error.
     public static func isError(_ object: XPCObject) -> Bool {
         #if canImport(Darwin)
-        return xpc_get_type(object) == XPC_TYPE_ERROR
+        return cXpcGetType(object) == errorTypeSymbol
         #else
         return false
         #endif

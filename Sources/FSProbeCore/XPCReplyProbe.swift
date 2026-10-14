@@ -317,11 +317,15 @@ public enum XPCReplyProbe {
     /// The count and the type are enough to tell a service's reply from XPC's own
     /// bookkeeping, and nothing sensitive is read in order to produce them.
     private static func describeShape(_ object: XPCObject) -> String {
-        let type = xpc_get_type(object)
-        if type == XPC_TYPE_DICTIONARY {
-            return "dictionary with \(xpc_dictionary_get_count(object)) key(s)"
+        // The type singletons are compared through XPCShim, which binds them by
+        // name. Comparing xpc_get_type's result against the imported constants
+        // directly fails to compile on the iOS SDK, where xpc_type_t is not an
+        // xpc_object_t.
+        let type = XPCShim.type(of: object)
+        if type == XPCShim.dictionaryType {
+            return "dictionary with \(XPCShim.dictionaryCount(object)) key(s)"
         }
-        if type == XPC_TYPE_ERROR {
+        if XPCShim.isError(object) {
             return "error object"
         }
         return "non-dictionary object"
