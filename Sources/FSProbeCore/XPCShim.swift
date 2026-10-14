@@ -175,6 +175,38 @@ public enum XPCShim {
         #endif
     }
 
+    /// Walk a dictionary, calling `body` with each key and value.
+    ///
+    /// Exposed so a caller can capture key NAMES without reading values, which is
+    /// the discipline the reply-contents probe depends on.
+    public static func dictionaryApply(
+        _ dictionary: XPCConnection,
+        _ body: @escaping @convention(block) (UnsafePointer<CChar>, XPCObject) -> Bool
+    ) {
+        #if canImport(Darwin)
+        xpc_dictionary_apply(dictionary, body)
+        #endif
+    }
+
+    /// The XPC type of an object, exposed so a caller can tell a dictionary from
+    /// an error without treating either as data.
+    public static func type(of object: XPCObject) -> XPCObject? {
+        #if canImport(Darwin)
+        return xpc_get_type(object)
+        #else
+        return nil
+        #endif
+    }
+
+    /// The XPC_TYPE_DICTIONARY singleton.
+    public static var dictionaryType: XPCObject? {
+        #if canImport(Darwin)
+        return XPC_TYPE_DICTIONARY
+        #else
+        return nil
+        #endif
+    }
+
     /// True when `object` is an XPC error.
     public static func isError(_ object: XPCObject) -> Bool {
         #if canImport(Darwin)

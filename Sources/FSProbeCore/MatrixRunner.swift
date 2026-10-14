@@ -71,6 +71,7 @@ public struct MatrixRunner: Sendable {
         var hostPort: HostPortProbe.Result?
         var processorSets: ProcessorSetProbe.Result?
         var foreignMemory: ForeignMemoryProbe.Result?
+        var xpcReplyContents: XPCReplyContentsProbe.Result?
         if runBoundaryExperiments {
             // The container is the app's own home; every experiment is scoped to
             // it and to paths it cannot reach.
@@ -174,6 +175,9 @@ public struct MatrixRunner: Sendable {
 
             // The endpoint of the whole ladder: another process's memory.
             foreignMemory = ForeignMemoryProbe.probe()
+
+            // A reply is not a primitive. What the reply contains decides it.
+            xpcReplyContents = XPCReplyContentsProbe.probe()
         }
 
         return CapabilityMatrix(
@@ -202,7 +206,8 @@ public struct MatrixRunner: Sendable {
             ipcSurface: ipcSurface,
             hostPort: hostPort,
             processorSets: processorSets,
-            foreignMemory: foreignMemory
+            foreignMemory: foreignMemory,
+            xpcReplyContents: xpcReplyContents
         )
     }
 }

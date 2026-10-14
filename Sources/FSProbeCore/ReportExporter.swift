@@ -600,6 +600,24 @@ public enum ReportExporter {
             }
         }
 
+        if let contents = matrix.xpcReplyContents {
+            lines.append("")
+            lines.append("What do the services that answer actually send back?")
+            for item in contents.replies {
+                let flag = item.isBoundaryViolation ? "  <-- BOUNDARY VIOLATION" : ""
+                lines.append("  [\(item.outcome.rawValue)] \(item.serviceName)\(flag)")
+                lines.append("      observed: \(item.observed ?? "no answer")")
+                lines.append("      result: \(item.interpretation)")
+            }
+            if !contents.violations.isEmpty {
+                lines.append("  VIOLATIONS: \(contents.violations.map { $0.serviceName }.joined(separator: ", "))")
+            } else if contents.replies.isEmpty {
+                lines.append("  NOT_ATTEMPTED: no reply-contents probe ran.")
+            } else {
+                lines.append("  no service replied with keys of its own")
+            }
+        }
+
         if let io = matrix.inodeOpen {
             lines.append("")
             lines.append("Open-by-inode (openbyid_np: no path traversal at all):")
@@ -728,6 +746,7 @@ public enum ReportExporter {
         let hostPort: HostPortProbe.Result?
         let processorSets: ProcessorSetProbe.Result?
         let foreignMemory: ForeignMemoryProbe.Result?
+        let xpcReplyContents: XPCReplyContentsProbe.Result?
 
         init(matrix: CapabilityMatrix) {
             self.schema = "fsprobe.capability-matrix.v9"
@@ -759,6 +778,7 @@ public enum ReportExporter {
             self.hostPort = matrix.hostPort
             self.processorSets = matrix.processorSets
             self.foreignMemory = matrix.foreignMemory
+            self.xpcReplyContents = matrix.xpcReplyContents
         }
     }
 }
