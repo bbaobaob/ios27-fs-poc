@@ -139,14 +139,36 @@ public enum ForeignMemoryProbe {
         }
     }
 
-    /// Page zero, one page. The minimum that answers the question.
-    private static let probeAddress: UInt64 = 0
+    /// One page, allocated in this app's own task so the control read has a real,
+    /// mapped address to read.
+    ///
+    /// Address zero is not mapped in any task, so probing it makes the self-control
+    /// fail on every platform -- which gates the whole experiment off behind a
+    /// control that cannot pass, and reports "uninterpretable" for a question that
+    /// was never actually asked. Allocating a page fixes that, and it is still the
+    /// minimum that answers the question.
     private static let probeSize: Int = 4096
+
+    /// A mapped page in this app's own address space, allocated once and released
+    /// when the probe finishes. Zero when allocation failed, in which case the
+    /// control reports the reason rather than silently probing an unmapped address.
+    private static let probeAddress: UInt64 = {
+        var address: UInt64 = 0
+        let kr = MachShim.vmAllocate(MachShim.taskSelf, &address, probeSize)
+        return kr == 0 ? address : 0
+    }()
+
+    /// Release the probe page. Called once, after every read is done.
+    private static func releaseProbePage() {
+        guard probeAddress != 0 else { return }
+        _ = MachShim.vmDeallocate(MachShim.taskSelf, MachPort(probeAddress), probeSize)
+    }
 
     public static func probe() -> Result {
         guard MachShim.available else {
             return Result(reads: [unavailable()], violations: [])
         }
+        defer { releaseProbePage() }
 
         var reads: [Read] = []
 

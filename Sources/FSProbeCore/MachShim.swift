@@ -338,6 +338,28 @@ public enum MachShim {
     ) -> Int32
     #endif
 
+    #if canImport(Darwin)
+    @_silgen_name("vm_allocate")
+    private static func cVMAllocate(
+        _ task: MachPort, _ address: UnsafeMutablePointer<UInt64>, _ size: Int, _ flags: Int32
+    ) -> Int32
+    #endif
+
+    /// `vm_allocate(task, &address, size, flags)` — allocate a page in a task.
+    ///
+    /// Used to give the memory-read probe a real, mapped address to read, so its
+    /// self-control can actually pass instead of failing on an unmapped address.
+    @discardableResult
+    public static func vmAllocate(
+        _ task: MachPort, _ address: UnsafeMutablePointer<UInt64>, _ size: Int
+    ) -> Int32 {
+        #if canImport(Darwin)
+        return cVMAllocate(task, address, size, 0)
+        #else
+        return -1
+        #endif
+    }
+
     /// `vm_deallocate(task, address, size)` — release a vm-allocated buffer.
     ///
     /// This is the correct way to release the buffers that `task_threads` and
