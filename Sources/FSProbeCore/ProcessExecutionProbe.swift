@@ -274,7 +274,7 @@ public enum ProcessExecutionProbe {
         if let stream {
             // Reap it immediately: the command does nothing and the pipe is closed.
             #if canImport(Darwin)
-            _ = pclose(UnsafeMutablePointer<FILE>(stream))
+            _ = cPclose(stream)
             #endif
             return Spawn(
                 id: id, mechanism: mechanism, operation: operation,
@@ -339,15 +339,31 @@ public enum ProcessExecutionProbe {
         #endif
     }
 
-    /// `popen` returns a `FILE *`, which is not a type Swift exposes on every
-    /// platform this builds for. The stream is therefore handled as an opaque
-    /// pointer and cast back where it is used, which keeps the platform seam in
-    /// one place rather than spreading `#if` through the case logic.
+    // popen and pclose are bound by name rather than called through the import,
+    // because the Swift import marks them unavailable with the note "On iOS,
+    // process spawning is unavailable". That note is itself evidence -- Apple
+    // closed this path in the SDK -- but an unavailable API is not the same as an
+    // absent symbol, which is the distinction this whole project turns on. Binding
+    // by name resolves the real symbol in the runtime and lets the experiment
+    // measure what the kernel does rather than what the header allows.
+    //
+    // The FILE* that popen returns is handled as an opaque pointer, because FILE
+    // is not a type Swift exposes on every platform this builds for.
+    #if canImport(Darwin)
+    @_silgen_name("popen")
+    private static func cPopen(
+        _ command: UnsafePointer<CChar>, _ mode: UnsafePointer<CChar>
+    ) -> OpaquePointer?
+
+    @_silgen_name("pclose")
+    private static func cPclose(_ stream: OpaquePointer?) -> Int32
+    #endif
+
     private static func runPopen(_ command: String) -> OpaquePointer? {
         #if canImport(Darwin)
         return command.withCString { commandPath in
             "r".withCString { mode in
-                OpaquePointer(popen(commandPath, mode))
+                cPopen(commandPath, mode)
             }
         }
         #else
