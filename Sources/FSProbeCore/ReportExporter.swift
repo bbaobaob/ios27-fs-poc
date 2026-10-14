@@ -618,6 +618,61 @@ public enum ReportExporter {
             }
         }
 
+        if let execution = matrix.processExecution {
+            lines.append("")
+            lines.append("Can an ordinary app execute a system binary?")
+            for item in execution.spawns {
+                let flag = item.isBoundaryViolation ? "  <-- BOUNDARY VIOLATION" : ""
+                lines.append("  [\(item.outcome.rawValue)] \(item.id)\(flag)")
+                lines.append("      \(item.operation)  args: \(item.arguments)")
+                if let rv = item.returnValue { lines.append("      return: \(rv)") }
+                if let err = item.errnoName { lines.append("      errno: \(err)") }
+                lines.append("      observed: \(item.observed ?? "no answer")")
+                lines.append("      result: \(item.interpretation)")
+            }
+            if !execution.violations.isEmpty {
+                lines.append("  VIOLATIONS: \(execution.violations.map { $0.id }.joined(separator: ", "))")
+            } else if execution.spawns.isEmpty {
+                lines.append("  NOT_ATTEMPTED: no execution experiment ran.")
+            } else {
+                lines.append("  no system binary could be executed")
+            }
+        }
+
+        if let spawn = matrix.profileSpawn {
+            lines.append("")
+            lines.append("Can an ordinary app name its child's sandbox profile? (CVE-2026-20628)")
+            for item in spawn.attempts {
+                let flag = item.isBoundaryViolation ? "  <-- BOUNDARY VIOLATION" : ""
+                lines.append("  [\(item.outcome.rawValue)] \(item.id)\(flag)")
+                lines.append("      \(item.operation)  args: \(item.arguments)")
+                if let rv = item.returnValue { lines.append("      return: \(rv)") }
+                if let err = item.errnoName { lines.append("      errno: \(err)") }
+                lines.append("      observed: \(item.observed ?? "no answer")")
+                lines.append("      result: \(item.interpretation)")
+            }
+            if !spawn.violations.isEmpty {
+                lines.append("  VIOLATIONS: \(spawn.violations.map { $0.id }.joined(separator: ", "))")
+            } else if spawn.attempts.isEmpty {
+                lines.append("  NOT_ATTEMPTED: no profile-spawn experiment ran.")
+            } else {
+                lines.append("  no built-in profile name was accepted from the sandbox")
+            }
+        }
+
+        if let census = matrix.machServiceCensus {
+            lines.append("")
+            lines.append("Mach service census (launchd.plist enumeration):")
+            lines.append("  manifest readable: \(census.manifestReadable)")
+            lines.append("  manifest entries: \(census.manifestEntryCount)")
+            lines.append("  reachable: \(census.reachableNames.count)"
+                + "  (of which \(census.reachableNames.filter { !MachServiceEnumerationProbe.alreadyTested.contains($0) }.count) are new)")
+            lines.append("  refused: \(census.refusedCount)")
+            for name in census.reachableNames where !MachServiceEnumerationProbe.alreadyTested.contains(name) {
+                lines.append("    NEW: \(name)")
+            }
+        }
+
         if let io = matrix.inodeOpen {
             lines.append("")
             lines.append("Open-by-inode (openbyid_np: no path traversal at all):")
@@ -747,6 +802,9 @@ public enum ReportExporter {
         let processorSets: ProcessorSetProbe.Result?
         let foreignMemory: ForeignMemoryProbe.Result?
         let xpcReplyContents: XPCReplyContentsProbe.Result?
+        let processExecution: ProcessExecutionProbe.Result?
+        let profileSpawn: SandboxProfileSpawnProbe.Result?
+        let machServiceCensus: MachServiceEnumerationProbe.Result?
 
         init(matrix: CapabilityMatrix) {
             self.schema = "fsprobe.capability-matrix.v9"
@@ -779,6 +837,9 @@ public enum ReportExporter {
             self.processorSets = matrix.processorSets
             self.foreignMemory = matrix.foreignMemory
             self.xpcReplyContents = matrix.xpcReplyContents
+            self.processExecution = matrix.processExecution
+            self.profileSpawn = matrix.profileSpawn
+            self.machServiceCensus = matrix.machServiceCensus
         }
     }
 }

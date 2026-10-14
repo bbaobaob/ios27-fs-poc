@@ -72,6 +72,9 @@ public struct MatrixRunner: Sendable {
         var processorSets: ProcessorSetProbe.Result?
         var foreignMemory: ForeignMemoryProbe.Result?
         var xpcReplyContents: XPCReplyContentsProbe.Result?
+        var processExecution: ProcessExecutionProbe.Result?
+        var profileSpawn: SandboxProfileSpawnProbe.Result?
+        var machServiceCensus: MachServiceEnumerationProbe.Result?
         if runBoundaryExperiments {
             // The container is the app's own home; every experiment is scoped to
             // it and to paths it cannot reach.
@@ -178,6 +181,19 @@ public struct MatrixRunner: Sendable {
 
             // A reply is not a primitive. What the reply contains decides it.
             xpcReplyContents = XPCReplyContentsProbe.probe()
+
+            // The most consequential untested thing: can an ordinary app run a
+            // system binary? A spawn is the primitive every escalation needs.
+            processExecution = ProcessExecutionProbe.probe()
+
+            // CVE-2026-20628: naming a built-in sandbox profile for a child. The
+            // advisory covers 26.3 and earlier; iOS 27.0 is later, so the fix is
+            // expected -- but expected is not measured.
+            profileSpawn = SandboxProfileSpawnProbe.probe()
+
+            // A census of reachable services rather than the hand-written list of
+            // eight. The published method: parse launchd.plist and try each name.
+            machServiceCensus = MachServiceEnumerationProbe.probe()
         }
 
         return CapabilityMatrix(
@@ -207,7 +223,10 @@ public struct MatrixRunner: Sendable {
             hostPort: hostPort,
             processorSets: processorSets,
             foreignMemory: foreignMemory,
-            xpcReplyContents: xpcReplyContents
+            xpcReplyContents: xpcReplyContents,
+            processExecution: processExecution,
+            profileSpawn: profileSpawn,
+            machServiceCensus: machServiceCensus
         )
     }
 }
