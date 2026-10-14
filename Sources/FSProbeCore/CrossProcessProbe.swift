@@ -168,7 +168,15 @@ public enum CrossProcessProbe {
             )
         }
 
-        let connection = XPCShim.createConnection(name)
+        guard let connection = XPCShim.createConnection(name) else {
+            return MachServiceProbe(
+                serviceName: name, rationale: rationale,
+                symbolResolved: true,
+                reachability: .notAttempted,
+                refusalReason: "the connection factory returned no object",
+                responseMilliseconds: nil
+            )
+        }
 
         let semaphore = DispatchSemaphore(value: 0)
         let lock = NSLock()
