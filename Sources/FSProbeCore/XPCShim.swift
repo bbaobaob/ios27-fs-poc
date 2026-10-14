@@ -51,7 +51,9 @@ public enum XPCShim {
     /// question the SDK availability cannot: does the code exist in the runtime,
     /// and if so, what does the operating system do when it is called?
     #if canImport(Darwin)
-    private typealias CreateMachServiceFn = @convention(c) (
+    /// The factory's C signature. Internal rather than private, because a public
+    /// property cannot expose a private type.
+    typealias CreateMachServiceFn = @convention(c) (
         UnsafePointer<CChar>, DispatchQueue?, UInt64
     ) -> XPCConnection?
 

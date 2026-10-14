@@ -240,7 +240,7 @@ public enum XPCReplyProbe {
         // An empty message: no path, no identifier, no resource reference. This
         // asks only whether the service answers a caller it has not identified.
         let message = xpc_dictionary_create(nil, nil, 0)
-        cSendMessageWithReply(connection, message, nil) { replyEvent in
+        XPCShim.sendMessageWithReply(connection, message) { replyEvent in
             lock.lock()
             defer { lock.unlock() }
             if XPCShim.isError(replyEvent) {
