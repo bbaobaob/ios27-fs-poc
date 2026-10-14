@@ -159,9 +159,16 @@ public enum ForeignMemoryProbe {
     /// run after the first. That is the same class of defect as reading address
     /// zero -- a control that cannot pass, hiding a question that was never asked.
     private static func allocateProbePage() -> UInt64 {
+        // vm_allocate is tried first. When it is unavailable or fails -- which it
+        // does on the simulator, returning KERN_INVALID_ADDRESS -- fall back to
+        // the address of a real object in this process, which is mapped by
+        // definition and needs no allocation at all. The control then measures
+        // the boundary instead of measuring whether vm_allocate works here.
         var address: UInt64 = 0
         let kr = MachShim.vmAllocate(MachShim.taskSelf, &address, probeSize)
-        guard kr == 0, address != 0 else { return 0 }
+        guard kr == 0, address != 0 else {
+            return Self.fallbackProbeAddress()
+        }
         // Touch the page. An allocated-but-untouched page has no physical backing
         // on some kernels, and mach_vm_read on it fails with an address error --
         // which would make the self-control fail for a reason that has nothing to
@@ -173,8 +180,24 @@ public enum ForeignMemoryProbe {
 
     /// Release the probe page. Called once, after every read in one probe() run.
     private static func releaseProbePage(_ address: UInt64) {
-        guard address != 0 else { return }
+        guard address != 0, !isFallbackAddress(address) else { return }
         _ = MachShim.vmDeallocate(MachShim.taskSelf, MachPort(address), probeSize)
+    }
+
+    /// A storage location whose address is valid for the life of the process.
+    private static let fallbackStorage = UnsafeMutableRawPointer.allocate(
+        byteCount: 4096, alignment: 4096
+    )
+
+    /// The address of the fallback storage, as a task address.
+    private static func fallbackProbeAddress() -> UInt64 {
+        UInt64(UInt(bitPattern: Self.fallbackStorage))
+    }
+
+    /// True when the address is the fallback, which must never be deallocated:
+    /// it belongs to this process, not to a vm_allocate the probe made.
+    private static func isFallbackAddress(_ address: UInt64) -> Bool {
+        address == fallbackProbeAddress()
     }
 
     public static func probe() -> Result {
@@ -232,7 +255,7 @@ public enum ForeignMemoryProbe {
 
     private static func selfRead(address: UInt64) -> Read {
         let id = "mach-vm-read-self"
-        let operation = "mach_vm_read(mach_task_self_, 0, 4096, &data, &count)"
+        let operation = "mach_vm_read(mach_task_self_, <probe page>, 4096, &data, &count)"
         let mechanism = """
             CONTROL: reading this app's OWN memory. An app may legitimately do \
             this, so success proves the API works. That is what makes a refusal on \
@@ -510,7 +533,7 @@ public enum ForeignMemoryProbe {
                 Reading another process's memory. The Mach API is not present on \
                 this platform, so nothing was attempted.
                 """,
-            operation: "mach_vm_read(task, 0, 4096, &data, &count)",
+            operation: "mach_vm_read(task, <probe page>, 4096, &data, &count)",
             target: "launchd (pid 1)",
             expected: """
                 Denied. An ordinary app must not read another process's memory.
