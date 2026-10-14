@@ -157,8 +157,7 @@ public enum CrossProcessProbe {
     ) -> MachServiceProbe {
         let started = Date()
 
-        let connection = XPCShim.createConnection(name)
-        guard let connection else {
+        guard connectionFactoryAvailable else {
             // The symbol is absent from this runtime, so nothing was attempted.
             return MachServiceProbe(
                 serviceName: name, rationale: rationale,
@@ -169,20 +168,12 @@ public enum CrossProcessProbe {
             )
         }
 
+        let connection = XPCShim.createConnection(name)
+
         let semaphore = DispatchSemaphore(value: 0)
         let lock = NSLock()
         var reachability: MachReachability = .noResponse
         var refusalReason: String?
-
-        guard let connection else {
-            return MachServiceProbe(
-                serviceName: name, rationale: rationale,
-                symbolResolved: true,
-                reachability: .notAttempted,
-                refusalReason: "the connection factory returned no object",
-                responseMilliseconds: nil
-            )
-        }
 
         // An interruption means launchd refused the lookup, or the service died.
         // Its description string is the platform's own explanation, which is far
