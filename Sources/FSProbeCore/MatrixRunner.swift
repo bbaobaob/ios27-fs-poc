@@ -70,6 +70,7 @@ public struct MatrixRunner: Sendable {
         var ipcSurface: IPCSurfaceProbe.Result?
         var hostPort: HostPortProbe.Result?
         var processorSets: ProcessorSetProbe.Result?
+        var foreignMemory: ForeignMemoryProbe.Result?
         if runBoundaryExperiments {
             // The container is the app's own home; every experiment is scoped to
             // it and to paths it cannot reach.
@@ -170,6 +171,9 @@ public struct MatrixRunner: Sendable {
 
             // The call that would list every task on the device.
             processorSets = ProcessorSetProbe.probe()
+
+            // The endpoint of the whole ladder: another process's memory.
+            foreignMemory = ForeignMemoryProbe.probe()
         }
 
         return CapabilityMatrix(
@@ -197,7 +201,8 @@ public struct MatrixRunner: Sendable {
             xpcReplies: xpcReplies,
             ipcSurface: ipcSurface,
             hostPort: hostPort,
-            processorSets: processorSets
+            processorSets: processorSets,
+            foreignMemory: foreignMemory
         )
     }
 }

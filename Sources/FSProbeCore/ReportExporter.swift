@@ -575,6 +575,28 @@ public enum ReportExporter {
             }
         }
 
+        if let memory = matrix.foreignMemory {
+            lines.append("")
+            lines.append("Can an ordinary app read another process's memory?")
+            for item in memory.reads {
+                let flag = item.isBoundaryViolation ? "  <-- BOUNDARY VIOLATION" : ""
+                lines.append("  [\(item.outcome.rawValue)] \(item.id)  -> \(item.target)\(flag)")
+                lines.append("      \(item.operation)")
+                if let rv = item.returnValue { lines.append("      return: \(rv)") }
+                if let err = item.errorName { lines.append("      error: \(err)") }
+                if let bytes = item.bytesRead { lines.append("      bytes: \(bytes)") }
+                lines.append("      observed: \(item.observed ?? "no answer")")
+                lines.append("      result: \(item.interpretation)")
+            }
+            if !memory.violations.isEmpty {
+                lines.append("  VIOLATIONS: \(memory.violations.map { $0.id }.joined(separator: ", "))")
+            } else if memory.reads.isEmpty {
+                lines.append("  NOT_ATTEMPTED: no memory read ran.")
+            } else {
+                lines.append("  no foreign memory was readable")
+            }
+        }
+
         if let io = matrix.inodeOpen {
             lines.append("")
             lines.append("Open-by-inode (openbyid_np: no path traversal at all):")
@@ -702,6 +724,7 @@ public enum ReportExporter {
         let ipcSurface: IPCSurfaceProbe.Result?
         let hostPort: HostPortProbe.Result?
         let processorSets: ProcessorSetProbe.Result?
+        let foreignMemory: ForeignMemoryProbe.Result?
 
         init(matrix: CapabilityMatrix) {
             self.schema = "fsprobe.capability-matrix.v9"
@@ -732,6 +755,7 @@ public enum ReportExporter {
             self.ipcSurface = matrix.ipcSurface
             self.hostPort = matrix.hostPort
             self.processorSets = matrix.processorSets
+            self.foreignMemory = matrix.foreignMemory
         }
     }
 }

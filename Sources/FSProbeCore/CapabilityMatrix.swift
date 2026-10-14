@@ -73,6 +73,8 @@ public struct CapabilityMatrix: Sendable {
     public let hostPort: HostPortProbe.Result?
     /// Whether an ordinary app can enumerate every task on the device.
     public let processorSets: ProcessorSetProbe.Result?
+    /// Whether an ordinary app can read another process's memory.
+    public let foreignMemory: ForeignMemoryProbe.Result?
 
     /// Results of testing whether a user-granted scope is confined to what the
     /// user picked. Nil until the user grants access.
@@ -107,7 +109,8 @@ public struct CapabilityMatrix: Sendable {
         xpcReplies: XPCReplyProbe.Result? = nil,
         ipcSurface: IPCSurfaceProbe.Result? = nil,
         hostPort: HostPortProbe.Result? = nil,
-        processorSets: ProcessorSetProbe.Result? = nil
+        processorSets: ProcessorSetProbe.Result? = nil,
+        foreignMemory: ForeignMemoryProbe.Result? = nil
     ) {
         self.results = results
         self.environment = environment
@@ -136,6 +139,7 @@ public struct CapabilityMatrix: Sendable {
         self.ipcSurface = ipcSurface
         self.hostPort = hostPort
         self.processorSets = processorSets
+        self.foreignMemory = foreignMemory
     }
 
     /// Platform context captured at run time.

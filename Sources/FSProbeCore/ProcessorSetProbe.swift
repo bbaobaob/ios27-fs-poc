@@ -353,14 +353,23 @@ public enum ProcessorSetProbe {
 
     private static let taskHostPort: Int32 = 3
 
-    /// Release an array of ports this app owns, without using any of them.
+    // NOTE, and this cost a crash to learn: the arrays returned by task_threads and
+    // processor_set_tasks are NOT plain arrays of send rights that can be released
+    // one element at a time with mach_port_deallocate. They are vm-allocated
+    // buffers of port NAMES, and the correct way to release them is
+    // vm_deallocate on the buffer itself.
+    //
+    // The previous version of this function walked the buffer calling
+    // mach_port_deallocate on each element. On macOS task_threads succeeds (it
+    // returned seven threads), so the walk ran over a buffer whose contents are
+    // not individually owned rights, and the macOS test runner died with SIGSEGV
+    // in ProcessorSetProbeTests.
+    //
+    // The buffer is now released as a buffer, once, with vm_deallocate. No
+    // element is touched, which also means nothing obtained is used.
     private static func releasePortArray(_ array: MachPort, count: Int) {
-        guard count > 0 else { return }
-        let pointer = UnsafeMutablePointer<MachPort>(bitPattern: UInt(array))
-        guard let pointer else { return }
-        for index in 0..<count {
-            _ = MachShim.deallocatePort(MachShim.taskSelf, pointer[index])
-        }
+        guard count > 0, array != 0 else { return }
+        _ = MachShim.vmDeallocate(MachShim.taskSelf, array, count)
     }
 
     private static func classify(

@@ -288,6 +288,72 @@ public enum MachShim {
         #endif
     }
 
+    // The foreign-memory rungs. Bound by name because the Mach headers are not
+    // visible to a plain `import Darwin` on the iOS SDK.
+    #if canImport(Darwin)
+    @_silgen_name("mach_vm_read")
+    private static func cMachVMRead(
+        _ task: MachPort, _ address: UInt64, _ size: Int,
+        _ data: UnsafeMutablePointer<MachPort>, _ count: UnsafeMutablePointer<UInt32>
+    ) -> Int32
+
+    @_silgen_name("vm_read_overwrite")
+    private static func cVMReadOverwrite(
+        _ task: MachPort, _ address: UInt64, _ size: Int,
+        _ data: UnsafeMutableRawPointer, _ count: UnsafeMutablePointer<UInt32>
+    ) -> Int32
+    #endif
+
+    /// `mach_vm_read(task, address, size, &data, &count)` — read a task's memory.
+    public static func machVMRead(
+        _ task: MachPort, _ address: UInt64, _ size: Int,
+        _ data: UnsafeMutablePointer<MachPort>, _ count: UnsafeMutablePointer<UInt32>
+    ) -> Int32 {
+        #if canImport(Darwin)
+        return cMachVMRead(task, address, size, data, count)
+        #else
+        return -1
+        #endif
+    }
+
+    /// `vm_read_overwrite(task, address, size, data, &count)` — the same read into
+    /// a caller-supplied buffer. A separate predicate.
+    public static func vmReadOverwrite(
+        _ task: MachPort, _ address: UInt64, _ size: Int,
+        _ data: UnsafeMutableRawPointer, _ count: UnsafeMutablePointer<UInt32>
+    ) -> Int32 {
+        #if canImport(Darwin)
+        return cVMReadOverwrite(task, address, size, data, count)
+        #else
+        return -1
+        #endif
+    }
+
+    // vm_deallocate, bound by name for the same reason as the rest: the Mach
+    // headers are not visible to a plain `import Darwin` on the iOS SDK.
+    #if canImport(Darwin)
+    @_silgen_name("vm_deallocate")
+    private static func cVMDeallocate(
+        _ task: MachPort, _ address: MachPort, _ size: Int
+    ) -> Int32
+    #endif
+
+    /// `vm_deallocate(task, address, size)` — release a vm-allocated buffer.
+    ///
+    /// This is the correct way to release the buffers that `task_threads` and
+    /// `processor_set_tasks` return. They are vm-allocated arrays of port names,
+    /// not arrays of individually-owned send rights, so walking them with
+    /// mach_port_deallocate is wrong and crashes.
+    public static func vmDeallocate(
+        _ task: MachPort, _ address: MachPort, _ size: Int
+    ) -> Int32 {
+        #if canImport(Darwin)
+        return cVMDeallocate(task, address, size)
+        #else
+        return -1
+        #endif
+    }
+
     /// `mach_error_string(kr)` — the platform's own name for a kern_return_t.
     public static func machErrorString(_ kr: Int32) -> String {
         #if canImport(Darwin)
