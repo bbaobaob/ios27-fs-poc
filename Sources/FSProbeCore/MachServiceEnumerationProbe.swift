@@ -156,10 +156,16 @@ public enum MachServiceEnumerationProbe {
 
         let names = manifestServiceNames()
         let probed = Array(names.prefix(maxProbes))
-        let services = probed.map { name in
-            if name == controlName { return control }
-            return lookupService(name)
-        }
+
+        // The control is recorded first and unconditionally. It used to be added
+        // only when the manifest was unreadable, on the reasoning that the control
+        // mattered only then -- but a refusal is uninterpretable in either
+        // direction: without the negative control there is no way to tell a name
+        // the policy refused from a name that does not resolve, which is the one
+        // thing a census needs to know. The macOS runner caught this by producing
+        // a census with no control at all.
+        var services: [Service] = [control]
+        services.append(contentsOf: probed.map { lookupService($0) })
 
         let reachable = services.filter { $0.outcome == .reachable }
         let refused = services.filter { $0.outcome == .refused }
