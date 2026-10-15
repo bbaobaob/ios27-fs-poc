@@ -269,7 +269,7 @@ public enum SandboxProfileSpawnProbe {
     // and the C signature's `posix_spawnattr_t *attr` is a pointer to that. The
     // second parameter is `const void *`, which takes a raw pointer directly.
     private typealias SetMacPolicyInfoFn = @convention(c) (
-        UnsafeMutablePointer<UnsafeMutableRawPointer>, UnsafeRawPointer, Int
+        UnsafeMutablePointer<UnsafeMutableRawPointer?>, UnsafeRawPointer, Int
     ) -> Int32
 
     private static func resolveSetMacPolicyInfo() -> SetMacPolicyInfoFn? {
@@ -446,7 +446,22 @@ public enum SandboxProfileSpawnProbe {
         // the pointer is converted in one explicit step. Chained implicit
         // conversions from UnsafeMutableRawPointer to a typed const pointer are
         // exactly the kind of thing that compiles on one SDK and not another.
-        let attributeConst = UnsafeRawPointer(attributeStorage)
+        guard let attribute = attributeStorage else {
+            return Attempt(
+                id: id, mechanism: mechanism, operation: operation,
+                arguments: name,
+                expected: "Denied.",
+                expectedDenied: true,
+                outcome: .notAttempted,
+                errnoName: nil, returnValue: "the attribute was nil after init",
+                observed: "the spawn attributes carried no pointer",
+                interpretation: """
+                    NOT ATTEMPTED: the spawn attributes reported success but \
+                    carried no pointer, so there was nothing to spawn with.
+                    """
+            )
+        }
+        let attributeConst = UnsafeRawPointer(attribute)
             .assumingMemoryBound(to: UnsafeMutableRawPointer.self)
 
         setErrno(0)
