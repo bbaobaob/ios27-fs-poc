@@ -463,7 +463,8 @@ public enum SandboxProfileSpawnProbe {
                     """
             )
         }
-        let attributeConst = UnsafePointer(attributeStorage)
+        let attributeConst: UnsafePointer<UnsafeMutableRawPointer?> =
+            UnsafePointer(attributeStorage)
 
         setErrno(0)
         let rc = "/bin/sh".withCString { programPath in
