@@ -309,8 +309,13 @@ public enum SandboxProfileSpawnProbe {
         // rather than a zeroed buffer: the library owns the struct it points at,
         // and handing it uninitialised memory would be undefined behaviour that
         // could crash instead of answering the question.
-        var attribute = posix_spawnattr_t()
-        let initRC = cSpawnAttrInit(&attribute)
+        // The storage is declared at the C type -- `void *` -- rather than at
+        // whatever Swift imports `posix_spawnattr_t` to be, because Swift will not
+        // convert an UnsafeMutableRawPointer into a typed pointer. Declaring it the
+        // way the header does is the only spelling that does not depend on how this
+        // SDK happened to import the typedef.
+        var attributeStorage: UnsafeMutableRawPointer?
+        let initRC = cSpawnAttrInit(&attributeStorage)
         guard initRC == 0 else {
             return Attempt(
                 id: id, mechanism: mechanism, operation: operation,
@@ -326,11 +331,11 @@ public enum SandboxProfileSpawnProbe {
                     """
             )
         }
-        defer { _ = cSpawnAttrDestroy(&attribute) }
+        defer { _ = cSpawnAttrDestroy(&attributeStorage) }
 
         setErrno(0)
         let rc = name.withCString { cName in
-            setter(&attribute, cName, Int(strlen(cName)))
+            setter(&attributeStorage, cName, Int(strlen(cName)))
         }
         let err = currentErrno()
 
@@ -386,8 +391,8 @@ public enum SandboxProfileSpawnProbe {
             )
         }
 
-        var attribute = posix_spawnattr_t()
-        let initRC = cSpawnAttrInit(&attribute)
+        var attributeStorage: UnsafeMutableRawPointer?
+        let initRC = cSpawnAttrInit(&attributeStorage)
         guard initRC == 0 else {
             return Attempt(
                 id: id, mechanism: mechanism, operation: operation,
@@ -403,10 +408,10 @@ public enum SandboxProfileSpawnProbe {
                     """
             )
         }
-        defer { _ = cSpawnAttrDestroy(&attribute) }
+        defer { _ = cSpawnAttrDestroy(&attributeStorage) }
 
         let setRC = name.withCString { cName in
-            setter(&attribute, cName, Int(strlen(cName)))
+            setter(&attributeStorage, cName, Int(strlen(cName)))
         }
         guard setRC == 0 else {
             return Attempt(
@@ -441,7 +446,7 @@ public enum SandboxProfileSpawnProbe {
         // the pointer is converted in one explicit step. Chained implicit
         // conversions from UnsafeMutableRawPointer to a typed const pointer are
         // exactly the kind of thing that compiles on one SDK and not another.
-        let attributeConst = UnsafeRawPointer(attribute)
+        let attributeConst = UnsafeRawPointer(attributeStorage)
             .assumingMemoryBound(to: UnsafeMutableRawPointer.self)
 
         setErrno(0)
