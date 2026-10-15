@@ -321,18 +321,29 @@ public enum ProcessExecutionProbe {
         defer {
             for element in argv where element != nil { free(element) }
         }
-        return path.withCString { programPath in
-            posix_spawn(&pid, programPath, nil, nil, argv, nil)
+        let environment = [UnsafeMutablePointer<CChar>?](repeating: nil, count: 1)
+        let rc = path.withCString { programPath in
+            posix_spawn(&pid, programPath, nil, nil, argv, environment)
         }
+        return Int(rc)
         #else
         setErrno(ENOSYS)
         return -1
         #endif
     }
 
+    // `system` is bound by name for the same reason `popen` is: the SDK marks it
+    // unavailable with the note that process spawning is unavailable on iOS. That
+    // note is evidence about the SDK; the question here is about the kernel, and
+    // only the kernel can answer it.
+    #if canImport(Darwin)
+    @_silgen_name("system")
+    private static func cSystem(_ command: UnsafePointer<CChar>) -> Int32
+    #endif
+
     private static func runSystem(_ command: String) -> Int {
         #if canImport(Darwin)
-        return command.withCString { system($0) }
+        return Int(command.withCString { cSystem($0) })
         #else
         setErrno(ENOSYS)
         return -1

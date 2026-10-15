@@ -83,6 +83,8 @@ public struct CapabilityMatrix: Sendable {
     public let profileSpawn: SandboxProfileSpawnProbe.Result?
     /// A census of reachable mach services, from the launchd manifest.
     public let machServiceCensus: MachServiceEnumerationProbe.Result?
+    /// XPC services shipped inside system frameworks.
+    public let embeddedXPCServices: EmbeddedXPCServiceProbe.Result?
 
     /// Results of testing whether a user-granted scope is confined to what the
     /// user picked. Nil until the user grants access.
@@ -122,7 +124,8 @@ public struct CapabilityMatrix: Sendable {
         xpcReplyContents: XPCReplyContentsProbe.Result? = nil,
         processExecution: ProcessExecutionProbe.Result? = nil,
         profileSpawn: SandboxProfileSpawnProbe.Result? = nil,
-        machServiceCensus: MachServiceEnumerationProbe.Result? = nil
+        machServiceCensus: MachServiceEnumerationProbe.Result? = nil,
+        embeddedXPCServices: EmbeddedXPCServiceProbe.Result? = nil
     ) {
         self.results = results
         self.environment = environment
@@ -156,6 +159,7 @@ public struct CapabilityMatrix: Sendable {
         self.processExecution = processExecution
         self.profileSpawn = profileSpawn
         self.machServiceCensus = machServiceCensus
+        self.embeddedXPCServices = embeddedXPCServices
     }
 
     /// Platform context captured at run time.

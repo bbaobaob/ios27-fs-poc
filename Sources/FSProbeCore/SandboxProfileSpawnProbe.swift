@@ -161,7 +161,7 @@ public enum SandboxProfileSpawnProbe {
                         experiment was never attempted.
                         """,
                     operation: "posix_spawnattr_setmacpolicyinfo_np(attr, name, len)",
-                    arguments: "profile names: \\(profileNameList)",
+                    arguments: "profile names: \(profileNameList)",
                     expected: "Denied. A sandboxed process must not choose its child's profile.",
                     expectedDenied: true,
                     outcome: .symbolUnavailable,
@@ -225,7 +225,7 @@ public enum SandboxProfileSpawnProbe {
                     CVE-2026-20628: naming a built-in sandbox profile for a child.
                     """,
                 operation: "posix_spawnattr_setmacpolicyinfo_np(attr, name, len)",
-                arguments: "profile names: \\(profileNameList)",
+                arguments: "profile names: \(profileNameList)",
                 expected: "Denied. A sandboxed process must not choose its child's profile.",
                 expectedDenied: true,
                 outcome: .symbolUnavailable,
@@ -248,8 +248,11 @@ public enum SandboxProfileSpawnProbe {
         POSIXShim.lookupSymbol("posix_spawnattr_setmacpolicyinfo_np") != nil
     }
 
+    // posix_spawnattr_t is `void *`, so in Swift it is an UnsafeMutableRawPointer
+    // and the C signature's `posix_spawnattr_t *attr` is a pointer to that. The
+    // second parameter is `const void *`, which takes a raw pointer directly.
     private typealias SetMacPolicyInfoFn = @convention(c) (
-        OpaquePointer, UnsafeRawPointer, Int
+        UnsafeMutablePointer<UnsafeMutableRawPointer>, UnsafeRawPointer, Int
     ) -> Int32
 
     private static func resolveSetMacPolicyInfo() -> SetMacPolicyInfoFn? {
@@ -285,16 +288,32 @@ public enum SandboxProfileSpawnProbe {
             )
         }
 
-        // posix_spawnattr_t is an opaque pointer; allocate a buffer for it.
-        let attributeBuffer = UnsafeMutableRawPointer.allocate(
-            byteCount: 256, alignment: 8
-        )
-        defer { attributeBuffer.deallocate() }
-        memset(attributeBuffer, 0, 256)
+        // A real, initialised spawnattr. It has to come from posix_spawnattr_init
+        // rather than a zeroed buffer: the library owns the struct it points at,
+        // and handing it uninitialised memory would be undefined behaviour that
+        // could crash instead of answering the question.
+        var attribute = posix_spawnattr_t()
+        let initRC = posix_spawnattr_init(&attribute)
+        guard initRC == 0 else {
+            return Attempt(
+                id: id, mechanism: mechanism, operation: operation,
+                arguments: name,
+                expected: "Denied.",
+                expectedDenied: true,
+                outcome: .notAttempted,
+                errnoName: nil, returnValue: "init rc=\(initRC)",
+                observed: "the spawn attributes could not be initialised",
+                interpretation: """
+                    NOT ATTEMPTED: the spawn attributes could not be initialised, \
+                    so there was no attribute to set a profile on.
+                    """
+            )
+        }
+        defer { posix_spawnattr_destroy(&attribute) }
 
         setErrno(0)
         let rc = name.withCString { cName in
-            setter(attributeBuffer, cName, strlen(cName))
+            setter(&attribute, cName, Int(strlen(cName)))
         }
         let err = currentErrno()
 
@@ -350,14 +369,27 @@ public enum SandboxProfileSpawnProbe {
             )
         }
 
-        let attributeBuffer = UnsafeMutableRawPointer.allocate(
-            byteCount: 256, alignment: 8
-        )
-        defer { attributeBuffer.deallocate() }
-        memset(attributeBuffer, 0, 256)
+        var attribute = posix_spawnattr_t()
+        let initRC = posix_spawnattr_init(&attribute)
+        guard initRC == 0 else {
+            return Attempt(
+                id: id, mechanism: mechanism, operation: operation,
+                arguments: name,
+                expected: "Denied.",
+                expectedDenied: true,
+                outcome: .notAttempted,
+                errnoName: nil, returnValue: "init rc=\(initRC)",
+                observed: "the spawn attributes could not be initialised",
+                interpretation: """
+                    NOT ATTEMPTED: the spawn attributes could not be initialised, \
+                    so there was no attribute to set a profile on.
+                    """
+            )
+        }
+        defer { posix_spawnattr_destroy(&attribute) }
 
         let setRC = name.withCString { cName in
-            setter(attributeBuffer, cName, strlen(cName))
+            setter(&attribute, cName, Int(strlen(cName)))
         }
         guard setRC == 0 else {
             return Attempt(
@@ -383,9 +415,21 @@ public enum SandboxProfileSpawnProbe {
             for element in argv where element != nil { free(element) }
         }
 
+        // argv and envp are both `char *const []`, which Swift cannot infer from a
+        // literal, so the empty environment is named explicitly rather than passed
+        // as a bare nil.
+        let environment = [UnsafeMutablePointer<CChar>?](repeating: nil, count: 1)
+
+        // posix_spawn declares its attributes as `const posix_spawnattr_t *`, so
+        // the pointer is converted in one explicit step. Chained implicit
+        // conversions from UnsafeMutableRawPointer to a typed const pointer are
+        // exactly the kind of thing that compiles on one SDK and not another.
+        let attributeConst = UnsafeRawPointer(attribute)
+            .assumingMemoryBound(to: UnsafeMutableRawPointer.self)
+
         setErrno(0)
         let rc = "/bin/sh".withCString { programPath in
-            posix_spawn(&pid, programPath, nil, attributeBuffer, argv, nil)
+            posix_spawn(&pid, programPath, nil, attributeConst, argv, environment)
         }
         let err = currentErrno()
 

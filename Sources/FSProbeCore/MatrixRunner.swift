@@ -75,6 +75,7 @@ public struct MatrixRunner: Sendable {
         var processExecution: ProcessExecutionProbe.Result?
         var profileSpawn: SandboxProfileSpawnProbe.Result?
         var machServiceCensus: MachServiceEnumerationProbe.Result?
+        var embeddedXPCServices: EmbeddedXPCServiceProbe.Result?
         if runBoundaryExperiments {
             // The container is the app's own home; every experiment is scoped to
             // it and to paths it cannot reach.
@@ -194,6 +195,11 @@ public struct MatrixRunner: Sendable {
             // A census of reachable services rather than the hand-written list of
             // eight. The published method: parse launchd.plist and try each name.
             machServiceCensus = MachServiceEnumerationProbe.probe()
+
+            // XPC services inside system frameworks. These register into the
+            // loading app's PID domain, so launchd lookup never sees them and the
+            // sandbox profile never names them.
+            embeddedXPCServices = EmbeddedXPCServiceProbe.probe()
         }
 
         return CapabilityMatrix(
@@ -226,7 +232,8 @@ public struct MatrixRunner: Sendable {
             xpcReplyContents: xpcReplyContents,
             processExecution: processExecution,
             profileSpawn: profileSpawn,
-            machServiceCensus: machServiceCensus
+            machServiceCensus: machServiceCensus,
+            embeddedXPCServices: embeddedXPCServices
         )
     }
 }

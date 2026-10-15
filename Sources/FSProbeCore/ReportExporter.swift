@@ -673,6 +673,26 @@ public enum ReportExporter {
             }
         }
 
+        if let embedded = matrix.embeddedXPCServices {
+            lines.append("")
+            lines.append("XPC services shipped inside system frameworks:")
+            lines.append("  service bundles found: \(embedded.serviceBundlesFound)")
+            lines.append("  frameworks examined: \(embedded.frameworksExamined)")
+            for item in embedded.services {
+                let flag = item.isBoundaryViolation ? "  <-- REPLIED TO AN UNIDENTIFIED CALLER" : ""
+                lines.append("  [\(item.outcome.rawValue)] \(item.id)\(flag)")
+                lines.append("      \(item.operation)  args: \(item.arguments)")
+                if let obs = item.observed { lines.append("      observed: \(obs)") }
+                if let shape = item.replyShape { lines.append("      reply shape: \(shape)") }
+            }
+            if !embedded.violations.isEmpty {
+                let names = embedded.violations.map { $0.id }
+                lines.append("  REPLIED: " + names.joined(separator: ", "))
+            } else {
+                lines.append("  no service answered an unidentified caller")
+            }
+        }
+
         if let io = matrix.inodeOpen {
             lines.append("")
             lines.append("Open-by-inode (openbyid_np: no path traversal at all):")
@@ -805,6 +825,7 @@ public enum ReportExporter {
         let processExecution: ProcessExecutionProbe.Result?
         let profileSpawn: SandboxProfileSpawnProbe.Result?
         let machServiceCensus: MachServiceEnumerationProbe.Result?
+        let embeddedXPCServices: EmbeddedXPCServiceProbe.Result?
 
         init(matrix: CapabilityMatrix) {
             self.schema = "fsprobe.capability-matrix.v9"
@@ -840,6 +861,7 @@ public enum ReportExporter {
             self.processExecution = matrix.processExecution
             self.profileSpawn = matrix.profileSpawn
             self.machServiceCensus = matrix.machServiceCensus
+            self.embeddedXPCServices = matrix.embeddedXPCServices
         }
     }
 }

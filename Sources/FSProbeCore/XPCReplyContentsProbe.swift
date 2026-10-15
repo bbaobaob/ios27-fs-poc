@@ -210,7 +210,7 @@ public enum XPCReplyContentsProbe {
         case .repliedWithKeys:
             interpretation = """
                 The service replied to an empty message from a caller it had not \
-                identified, carrying keys of its own: \\(keyList). \
+                identified, carrying keys of its own: \(keyList). \
                 Those are not the transport's, so the daemon produced them. What \
                 they MEAN is the next question, and it is answered by sending a \
                 request that asks for something specific and seeing whether the \
@@ -243,7 +243,7 @@ public enum XPCReplyContentsProbe {
             serviceName: name, outcome: finalOutcome, keyNames: finalKeys,
             observed: finalKeys.isEmpty
                 ? "no keys in the reply"
-                : "keys: \\(keyList)",
+                : "keys: \(keyList)",
             interpretation: interpretation
         )
     }
