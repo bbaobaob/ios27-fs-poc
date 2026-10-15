@@ -123,6 +123,7 @@ final class MatrixViewModel {
     ) -> RunReport {
         let started = Date()
         let container = documentsDirectory()?.deletingLastPathComponent().path
+        let directory = documentsDirectory()
         let matrix = MatrixRunner().run(
             targets: targets,
             recordEntryNames: true,
@@ -135,7 +136,21 @@ final class MatrixViewModel {
             // Boundary-mechanism experiments plus the app's own sandbox profile,
             // read out of its container metadata. These test how the boundary is
             // enforced rather than which paths are permitted.
-            runBoundaryExperiments: true
+            runBoundaryExperiments: true,
+            // After every phase, write what exists so far to matrix-partial.json
+            // and matrix-partial.txt. The full battery takes minutes, and until
+            // this existed the matrix was written exactly once, at the end -- so
+            // a run that was killed, suspended, or interrupted produced NO
+            // evidence at all rather than partial evidence. An interrupted run
+            // and a run that found nothing are different facts, and only an
+            // incremental write keeps them apart. A phase that never ran stays
+            // nil in the snapshot, and the report already renders a nil section
+            // as NOT_ATTEMPTED -- so a partial file reads as "these phases did
+            // not happen", never as "these phases found nothing".
+            onProgress: { stage, partial in
+                guard let directory else { return }
+                MatrixViewModel.writePartial(partial, stage: stage, to: directory)
+            }
         )
 
         // Generated before the write attempt so the report is on screen even if
@@ -172,6 +187,38 @@ final class MatrixViewModel {
 
         return RunReport(matrix: matrix, text: text, files: files, issues: issues,
                          duration: Date().timeIntervalSince(started))
+    }
+
+    /// Write one incremental snapshot after a phase completes. Best-effort by
+    /// design: a failed write here must never fail the run, because the final
+    /// write at the end is what counts and this one exists only so that an
+    /// interrupted run leaves something behind. Failures are recorded in the
+    /// returned string rather than thrown.
+    @discardableResult
+    static func writePartial(
+        _ matrix: CapabilityMatrix,
+        stage: String,
+        to directory: URL
+    ) -> String? {
+        do {
+            let data = try ReportExporter.json(matrix)
+            try data.write(
+                to: directory.appendingPathComponent("matrix-partial.json"),
+                options: .atomic
+            )
+        } catch {
+            return "partial matrix.json was not written after \(stage): \(describe(error))"
+        }
+        do {
+            let text = ReportExporter.text(matrix, targets: [])
+            try text.write(
+                to: directory.appendingPathComponent("matrix-partial.txt"),
+                atomically: true, encoding: .utf8
+            )
+        } catch {
+            return "partial matrix.txt was not written after \(stage): \(describe(error))"
+        }
+        return nil
     }
 
     static func documentsDirectory() -> URL? {

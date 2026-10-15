@@ -228,8 +228,11 @@ jobs:
           xcrun simctl install "$SIMULATOR_UDID" "$APP"
           xcrun simctl launch "$SIMULATOR_UDID" com.bbaobaob.fsprobe
           # The app computes the matrix on launch and writes matrix.json /
-          # matrix.txt into its Documents directory.
-          for i in $(seq 1 24); do
+          # matrix.txt into its Documents directory, plus matrix-partial.json /
+          # matrix-partial.txt after every phase. The battery grew past the old
+          # 120-second budget (the embedded-XPC phase alone can take ~25 seconds
+          # worst case), so the budget grew with it: 30 iterations at 5 seconds.
+          for i in $(seq 1 30); do
             sleep 5
             CONTAINER="$(xcrun simctl get_app_container "$SIMULATOR_UDID" com.bbaobaob.fsprobe data 2>/dev/null || true)"
             if [ -n "$CONTAINER" ] && [ -f "$CONTAINER/Documents/matrix.json" ]; then
@@ -244,6 +247,16 @@ jobs:
           set -euo pipefail
           CONTAINER="$(xcrun simctl get_app_container "$SIMULATOR_UDID" com.bbaobaob.fsprobe data)"
           echo "App data container: $CONTAINER"
+          ls -lh "$CONTAINER/Documents/" || true
+          # Partial files are best-effort by design: they exist only if at least
+          # one phase finished. Their absence alongside a missing matrix.json
+          # means the run died before the first phase completed.
+          for f in matrix-partial.json matrix-partial.txt; do
+            if [ -f "$CONTAINER/Documents/$f" ]; then
+              cp "$CONTAINER/Documents/$f" "ios-simulator-$f"
+              echo "picked up $f"
+            fi
+          done
           cp "$CONTAINER/Documents/matrix.json" matrix-ios-simulator.json
           cp "$CONTAINER/Documents/matrix.txt" matrix-ios-simulator.txt
           echo "--- matrix.txt ---"
@@ -266,6 +279,8 @@ jobs:
           path: |
             matrix-ios-simulator.json
             matrix-ios-simulator.txt
+            ios-simulator-matrix-partial.json
+            ios-simulator-matrix-partial.txt
             simulator-app.log
           if-no-files-found: warn
           retention-days: 30

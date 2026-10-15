@@ -23,12 +23,20 @@ public struct MatrixRunner: Sendable {
     ///   - runBoundaryExperiments: when true, run the boundary-mechanism battery
     ///     (path resolution, hard links, rename, enumeration differential) and
     ///     read the app's own sandbox profile out of its container metadata.
+    ///   - onProgress: called after each phase with the results so far. The full
+    ///     battery takes minutes, and until this existed the matrix was written
+    ///     exactly once, at the end -- so a run that was killed, suspended, or
+    ///     interrupted produced NO evidence at all rather than partial evidence.
+    ///     All-or-nothing is the one shape this project cannot accept: an
+    ///     interrupted run and a run that found nothing are different facts, and
+    ///     only an incremental write keeps them apart.
     public func run(
         targets: [FSTarget],
         recordEntryNames: Bool = false,
         environment: CapabilityMatrix.EnvironmentRecord? = nil,
         ascendFrom: String? = nil,
-        runBoundaryExperiments: Bool = false
+        runBoundaryExperiments: Bool = false,
+        onProgress: ((_ stage: String, _ matrix: CapabilityMatrix) -> Void)? = nil
     ) -> CapabilityMatrix {
         var results: [ProbeResult] = []
         for target in targets {
@@ -76,6 +84,58 @@ public struct MatrixRunner: Sendable {
         var profileSpawn: SandboxProfileSpawnProbe.Result?
         var machServiceCensus: MachServiceEnumerationProbe.Result?
         var embeddedXPCServices: EmbeddedXPCServiceProbe.Result?
+
+        /// The matrix as it stands right now.
+        ///
+        /// Defined before the phases run and capturing every result variable, so
+        /// a snapshot taken mid-run is the same shape as the final one. A phase
+        /// that never ran stays nil, and the report already renders a nil section
+        /// as NOT_ATTEMPTED -- so an interrupted run reads as "these phases did
+        /// not happen" rather than as "these phases found nothing".
+        func snapshot() -> CapabilityMatrix {
+            CapabilityMatrix(
+                results: results,
+                environment: env,
+                ancestors: ancestors,
+                boundaryExperiments: boundary,
+                sandboxProfile: profile,
+                containerWrite: containerWrite,
+                inodeOpen: inodeOpen,
+                clone: clone,
+                xpcServices: xpcServices,
+                fileCoordinator: fileCoordinator,
+                machServices: machServices,
+                processIntrospection: processIntrospection,
+                preferenceDeputy: preferenceDeputy,
+                operationClasses: operationClasses,
+                metadataReads: metadataReads,
+                descriptorPrimitives: descriptorPrimitives,
+                foundationSurface: foundationSurface,
+                alternateLookups: alternateLookups,
+                remainingPrimitives: remainingPrimitives,
+                searchFS: searchFS,
+                machPrivilege: machPrivilege,
+                xpcReplies: xpcReplies,
+                ipcSurface: ipcSurface,
+                hostPort: hostPort,
+                processorSets: processorSets,
+                foreignMemory: foreignMemory,
+                xpcReplyContents: xpcReplyContents,
+                processExecution: processExecution,
+                profileSpawn: profileSpawn,
+                machServiceCensus: machServiceCensus,
+                embeddedXPCServices: embeddedXPCServices
+            )
+        }
+
+        func reportProgress(_ stage: String) {
+            onProgress?(stage, snapshot())
+        }
+
+        // The filesystem matrix is the base layer and is cheap; report it first so
+        // that even a run interrupted after a second has produced something.
+        reportProgress("filesystem-matrix")
+
         if runBoundaryExperiments {
             // The container is the app's own home; every experiment is scoped to
             // it and to paths it cannot reach.
@@ -90,6 +150,7 @@ public struct MatrixRunner: Sendable {
             containerWrite = ContainerWriteProbe.probe(containerPath: container)
             inodeOpen = InodeOpenProbe.probe(paths: InodeOpenProbe.defaultTargets())
             clone = CloneProbe.run(containerPath: container)
+            reportProgress("boundary-and-container")
 
             // Service-mediated authorization: which XPC services this process can
             // reach, and whether NSFileCoordinator performs unauthorized work on
@@ -121,6 +182,7 @@ public struct MatrixRunner: Sendable {
             // Cross-process introspection. The self-targeting control runs
             // first and gates the interpretation of every other attempt.
             processIntrospection = CrossProcessProbe.probeProcessIntrospection()
+            reportProgress("introspection")
 
             // cfprefsd is reachable (measured), and it writes files on the
             // caller's behalf. Test whether it resolves a caller-supplied suite
@@ -140,6 +202,7 @@ public struct MatrixRunner: Sendable {
             // a protected object and then operating through it is a separate
             // authorization question from every path-based experiment so far.
             descriptorPrimitives = DescriptorPrimitiveProbe.probe(containerPath: container)
+            reportProgress("metadata-and-descriptors")
 
             // The same boundary through Foundation and CoreFoundation instead of
             // libc. Includes access(), never tested directly, and the one public
@@ -154,6 +217,7 @@ public struct MatrixRunner: Sendable {
             // Primitives never tried before, each a separate authorization
             // predicate: the mount table, a host port, kernel MIBs, and copyfile.
             remainingPrimitives = RemainingPrimitivesProbe.probe(containerPath: container)
+            reportProgress("foundation-and-alternate-lookups")
 
             // A volume-wide name search, which is a different VFS operation from
             // reading a directory and has never been tested.
@@ -179,6 +243,7 @@ public struct MatrixRunner: Sendable {
 
             // The endpoint of the whole ladder: another process's memory.
             foreignMemory = ForeignMemoryProbe.probe()
+            reportProgress("mach-ladder")
 
             // A reply is not a primitive. What the reply contains decides it.
             xpcReplyContents = XPCReplyContentsProbe.probe()
@@ -191,6 +256,7 @@ public struct MatrixRunner: Sendable {
             // advisory covers 26.3 and earlier; iOS 27.0 is later, so the fix is
             // expected -- but expected is not measured.
             profileSpawn = SandboxProfileSpawnProbe.probe()
+            reportProgress("execution-and-profile-spawn")
 
             // A census of reachable services rather than the hand-written list of
             // eight. The published method: parse launchd.plist and try each name.
@@ -200,6 +266,7 @@ public struct MatrixRunner: Sendable {
             // loading app's PID domain, so launchd lookup never sees them and the
             // sandbox profile never names them.
             embeddedXPCServices = EmbeddedXPCServiceProbe.probe()
+            reportProgress("embedded-xpc-services")
         }
 
         return CapabilityMatrix(

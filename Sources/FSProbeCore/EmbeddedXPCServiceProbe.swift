@@ -158,7 +158,21 @@ public enum EmbeddedXPCServiceProbe {
 
     /// How many frameworks to examine. The walk is cheap but loading a framework
     /// is not free, and a bounded census is more useful than an unbounded one.
-    private static let maxFrameworks = 60
+    ///
+    /// The bound is also a time budget. Each examined service can wait up to
+    /// `perServiceTimeout` seconds for a reply, so the worst case for this phase
+    /// is maxFrameworks times that timeout. At 25 frameworks and 1 second each the
+    /// phase cannot add more than ~25 seconds to a run -- which matters because
+    /// the simulator run that validates every commit only waits 150 seconds for
+    /// the whole battery. A census that cannot finish inside the harness that
+    /// runs it produces no evidence at all, which is worse than a smaller census
+    /// whose counts are recorded.
+    public static let maxFrameworks = 25
+
+    /// Seconds to wait for one service to answer. Bounded, so a silent service
+    /// cannot hang the harness -- and the bound is what keeps the whole phase
+    /// inside the CI time budget (see maxFrameworks).
+    public static let perServiceTimeout: TimeInterval = 1.0
 
     /// A framework path that cannot exist, used as the load control.
     private static let controlFramework =
@@ -425,7 +439,7 @@ public enum EmbeddedXPCServiceProbe {
             semaphore.signal()
         }
 
-        let waited = semaphore.wait(timeout: .now() + 2.0)
+        let waited = semaphore.wait(timeout: .now() + perServiceTimeout)
         lock.lock()
         let finalReplied = waited != .timedOut && replied
         let finalInterrupted = interrupted
