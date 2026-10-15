@@ -255,6 +255,23 @@ public enum SandboxProfileSpawnProbe {
     // on the iOS SDK and would have failed again on any SDK that imports the
     // type differently. Naming the parameter explicitly removes the question.
     // Pointer representations are ABI-identical, so the binding is exact.
+    // posix_spawn is bound by name for one reason: its attributes parameter is
+    // `const posix_spawnattr_t *`, and every attempt to spell that conversion in
+    // Swift -- assumingMemoryBound, UnsafePointer, with or without an explicit
+    // pointee -- failed to match what the SDK imports. Naming the parameter as the
+    // same `void *` storage the rest of this file uses removes the conversion
+    // entirely. All six parameters are pointers of identical representation, so the
+    // binding is exact.
+    @_silgen_name("posix_spawn")
+    private static func cPosixSpawn(
+        _ pid: UnsafeMutablePointer<Int32>,
+        _ path: UnsafePointer<CChar>,
+        _ fileActions: UnsafeRawPointer?,
+        _ attributes: UnsafeMutableRawPointer?,
+        _ argv: UnsafePointer<UnsafeMutablePointer<CChar>?>,
+        _ environment: UnsafePointer<UnsafeMutablePointer<CChar>?>
+    ) -> Int32
+
     @_silgen_name("posix_spawnattr_init")
     private static func cSpawnAttrInit(
         _ attribute: UnsafeMutablePointer<UnsafeMutableRawPointer?>
@@ -463,12 +480,11 @@ public enum SandboxProfileSpawnProbe {
                     """
             )
         }
-        let attributeConst: UnsafePointer<UnsafeMutableRawPointer?> =
-            UnsafePointer(attributeStorage)
+        let attributeConst = attributeStorage
 
         setErrno(0)
         let rc = "/bin/sh".withCString { programPath in
-            posix_spawn(&pid, programPath, nil, attributeConst, argv, environment)
+            cPosixSpawn(&pid, programPath, nil, attributeConst, argv, environment)
         }
         let err = currentErrno()
 
