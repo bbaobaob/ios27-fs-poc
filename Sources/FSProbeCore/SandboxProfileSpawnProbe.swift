@@ -255,23 +255,6 @@ public enum SandboxProfileSpawnProbe {
     // on the iOS SDK and would have failed again on any SDK that imports the
     // type differently. Naming the parameter explicitly removes the question.
     // Pointer representations are ABI-identical, so the binding is exact.
-    // posix_spawn is bound by name for one reason: its attributes parameter is
-    // `const posix_spawnattr_t *`, and every attempt to spell that conversion in
-    // Swift -- assumingMemoryBound, UnsafePointer, with or without an explicit
-    // pointee -- failed to match what the SDK imports. Naming the parameter as the
-    // same `void *` storage the rest of this file uses removes the conversion
-    // entirely. All six parameters are pointers of identical representation, so the
-    // binding is exact.
-    @_silgen_name("posix_spawn")
-    private static func cPosixSpawn(
-        _ pid: UnsafeMutablePointer<Int32>,
-        _ path: UnsafePointer<CChar>,
-        _ fileActions: UnsafeRawPointer?,
-        _ attributes: UnsafeMutableRawPointer?,
-        _ argv: UnsafePointer<UnsafeMutablePointer<CChar>?>,
-        _ environment: UnsafePointer<UnsafeMutablePointer<CChar>?>
-    ) -> Int32
-
     @_silgen_name("posix_spawnattr_init")
     private static func cSpawnAttrInit(
         _ attribute: UnsafeMutablePointer<UnsafeMutableRawPointer?>
@@ -480,11 +463,19 @@ public enum SandboxProfileSpawnProbe {
                     """
             )
         }
-        let attributeConst = attributeStorage
+        // The import wants `UnsafePointer<UnsafeMutableRawPointer?>?` for the
+        // attributes, which is exactly the C type: posix_spawnattr_t is `void *`
+        // imported as an optional raw pointer. The address is taken inside
+        // withUnsafePointer so the storage and the conversion are the same
+        // expression -- there is no separate converted variable that could drift
+        // out of step with the storage it was made from.
+        var storage = attributeStorage
 
         setErrno(0)
         let rc = "/bin/sh".withCString { programPath in
-            cPosixSpawn(&pid, programPath, nil, attributeConst, argv, environment)
+            withUnsafePointer(to: &storage) { attributePointer in
+                posix_spawn(&pid, programPath, nil, attributePointer, argv, environment)
+            }
         }
         let err = currentErrno()
 
