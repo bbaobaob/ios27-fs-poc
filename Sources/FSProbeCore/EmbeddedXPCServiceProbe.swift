@@ -219,7 +219,7 @@ public enum EmbeddedXPCServiceProbe {
         #if canImport(Darwin)
         // The binary inside a framework bundle is named after the framework with
         // the extension removed: Foo.framework/Foo.
-        let stem = (frameworkPath as NSString).deletingPathExtension
+        let stem = ((frameworkPath as NSString).deletingPathExtension as NSString)
             .lastPathComponent
         let binary = frameworkPath + "/" + stem
         let handle = binary.withCString { dlopen($0, RTLD_LAZY) }

@@ -248,6 +248,23 @@ public enum SandboxProfileSpawnProbe {
         POSIXShim.lookupSymbol("posix_spawnattr_setmacpolicyinfo_np") != nil
     }
 
+    // The spawn-attribute lifecycle is bound by name rather than called through
+    // the import. `posix_spawnattr_t` is `void *`, so the C signature is
+    // `int posix_spawnattr_init(void **)`, and Swift's imported form of that is
+    // not a form this file can spell portably: the same call failed to compile
+    // on the iOS SDK and would have failed again on any SDK that imports the
+    // type differently. Naming the parameter explicitly removes the question.
+    // Pointer representations are ABI-identical, so the binding is exact.
+    @_silgen_name("posix_spawnattr_init")
+    private static func cSpawnAttrInit(
+        _ attribute: UnsafeMutablePointer<UnsafeMutableRawPointer?>
+    ) -> Int32
+
+    @_silgen_name("posix_spawnattr_destroy")
+    private static func cSpawnAttrDestroy(
+        _ attribute: UnsafeMutablePointer<UnsafeMutableRawPointer?>
+    ) -> Int32
+
     // posix_spawnattr_t is `void *`, so in Swift it is an UnsafeMutableRawPointer
     // and the C signature's `posix_spawnattr_t *attr` is a pointer to that. The
     // second parameter is `const void *`, which takes a raw pointer directly.
@@ -293,7 +310,7 @@ public enum SandboxProfileSpawnProbe {
         // and handing it uninitialised memory would be undefined behaviour that
         // could crash instead of answering the question.
         var attribute = posix_spawnattr_t()
-        let initRC = posix_spawnattr_init(&attribute)
+        let initRC = cSpawnAttrInit(&attribute)
         guard initRC == 0 else {
             return Attempt(
                 id: id, mechanism: mechanism, operation: operation,
@@ -309,7 +326,7 @@ public enum SandboxProfileSpawnProbe {
                     """
             )
         }
-        defer { posix_spawnattr_destroy(&attribute) }
+        defer { _ = cSpawnAttrDestroy(&attribute) }
 
         setErrno(0)
         let rc = name.withCString { cName in
@@ -370,7 +387,7 @@ public enum SandboxProfileSpawnProbe {
         }
 
         var attribute = posix_spawnattr_t()
-        let initRC = posix_spawnattr_init(&attribute)
+        let initRC = cSpawnAttrInit(&attribute)
         guard initRC == 0 else {
             return Attempt(
                 id: id, mechanism: mechanism, operation: operation,
@@ -386,7 +403,7 @@ public enum SandboxProfileSpawnProbe {
                     """
             )
         }
-        defer { posix_spawnattr_destroy(&attribute) }
+        defer { _ = cSpawnAttrDestroy(&attribute) }
 
         let setRC = name.withCString { cName in
             setter(&attribute, cName, Int(strlen(cName)))
