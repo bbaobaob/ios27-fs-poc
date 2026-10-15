@@ -443,10 +443,12 @@ public enum SandboxProfileSpawnProbe {
         let environment = [UnsafeMutablePointer<CChar>?](repeating: nil, count: 1)
 
         // posix_spawn declares its attributes as `const posix_spawnattr_t *`, so
-        // the pointer is converted in one explicit step. Chained implicit
-        // conversions from UnsafeMutableRawPointer to a typed const pointer are
-        // exactly the kind of thing that compiles on one SDK and not another.
-        guard let attribute = attributeStorage else {
+        // the storage is re-typed as a const pointer to the same pointee. Note
+        // that this SDK imports `posix_spawnattr_t` as an OPTIONAL raw pointer --
+        // an observation from a compiler error, not an assumption -- so the pointee
+        // here is optional to match. Re-pointing the memory would have produced a
+        // pointer of the wrong type that still looked correct.
+        guard attributeStorage != nil else {
             return Attempt(
                 id: id, mechanism: mechanism, operation: operation,
                 arguments: name,
@@ -461,8 +463,7 @@ public enum SandboxProfileSpawnProbe {
                     """
             )
         }
-        let attributeConst = UnsafeRawPointer(attribute)
-            .assumingMemoryBound(to: UnsafeMutableRawPointer.self)
+        let attributeConst = UnsafePointer(attributeStorage)
 
         setErrno(0)
         let rc = "/bin/sh".withCString { programPath in
