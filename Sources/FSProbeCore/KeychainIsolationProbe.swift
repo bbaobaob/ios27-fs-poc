@@ -372,10 +372,10 @@ public enum KeychainIsolationProbe {
         // isa pointer out of it, so a char buffer in its place dereferences
         // attacker-shaped memory and the caller dies with SIGSEGV. That is not
         // hypothetical -- it is what the first version of this binding did on
-        // the macOS runner. OpaquePointer carries the object without claiming
-        // a type the binding cannot prove.
+        // the macOS runner. The raw pointer below carries the object without
+        // claiming a type the binding cannot prove.
         typealias CopyEntitlementFn = @convention(c) (
-            OpaquePointer?, OpaquePointer?, UnsafeMutableRawPointer?
+            OpaquePointer?, UnsafeMutableRawPointer?, UnsafeMutableRawPointer?
         ) -> Unmanaged<CFString>?
         guard let createPtr = POSIXShim.lookupSymbol("SecTaskCreateFromSelf"),
               let copyPtr = POSIXShim.lookupSymbol("SecTaskCopyValueForEntitlement")
