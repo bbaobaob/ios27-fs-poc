@@ -270,6 +270,19 @@ jobs:
             'process == "FSProbe"' > simulator-app.log 2>&1
           xcrun simctl terminate "$SIMULATOR_UDID" com.bbaobaob.fsprobe 2>&1 || true
           tail -40 simulator-app.log || true
+          # If the app crashed rather than hung, the evidence is a crash report
+          # on the host, not in the simulator log. Without this the next death
+          # is a hang-or-crash mystery all over again.
+          echo "--- FSProbe crash reports on the host ---"
+          ls -lt ~/Library/Logs/DiagnosticReports/ 2>/dev/null \
+            | grep -i fsprobe | head -5 || echo "no FSProbe crash report found"
+          LATEST="$(ls -t ~/Library/Logs/DiagnosticReports/ 2>/dev/null \
+            | grep -i fsprobe | head -1 || true)"
+          if [ -n "$LATEST" ]; then
+            echo "--- $LATEST (head) ---"
+            head -60 "$HOME/Library/Logs/DiagnosticReports/$LATEST" || true
+            cp "$HOME/Library/Logs/DiagnosticReports/$LATEST" fsprobe-crash.ips || true
+          fi
 
       - name: Upload the simulator matrix
         if: always()
@@ -282,5 +295,6 @@ jobs:
             ios-simulator-matrix-partial.json
             ios-simulator-matrix-partial.txt
             simulator-app.log
+            fsprobe-crash.ips
           if-no-files-found: warn
           retention-days: 30

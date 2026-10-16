@@ -247,10 +247,18 @@ public struct MatrixRunner: Sendable {
 
             // A reply is not a primitive. What the reply contains decides it.
             xpcReplyContents = XPCReplyContentsProbe.probe()
+            // One marker per module through the death window, not one per
+            // group. The simulator run that validates every commit once died
+            // between "mach-ladder" and "execution-and-profile-spawn" with three
+            // modules in between and no way to tell which one killed it. A
+            // progress marker is nearly free and turns the next death from a
+            // three-suspect mystery into a named module.
+            reportProgress("xpc-reply-contents")
 
             // The most consequential untested thing: can an ordinary app run a
             // system binary? A spawn is the primitive every escalation needs.
             processExecution = ProcessExecutionProbe.probe()
+            reportProgress("process-execution")
 
             // CVE-2026-20628: naming a built-in sandbox profile for a child. The
             // advisory covers 26.3 and earlier; iOS 27.0 is later, so the fix is

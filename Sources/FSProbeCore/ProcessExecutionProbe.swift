@@ -294,6 +294,28 @@ public enum ProcessExecutionProbe {
             )
         }
 
+        // A nil stream with a zero errno must never read as permitted: the
+        // classifier treats (rc == -1, err == 0) as success, which is correct for
+        // a call that returns -1 on failure with errno set, but popen returns a
+        // POINTER, not an int -- nil with no errno means "no stream and no
+        // reason", which is unanswered, not permitted. The sentinel keeps the
+        // two cases apart.
+        if err == 0 {
+            return Spawn(
+                id: id, mechanism: mechanism, operation: operation,
+                arguments: arguments,
+                expected: "Denied with EPERM.",
+                expectedDenied: true,
+                outcome: .otherError,
+                errnoName: nil,
+                returnValue: "nil stream, errno 0",
+                observed: "no stream was returned and no errno was set",
+                interpretation: """
+                    No pipe was obtained and the platform gave no reason, so \
+                    nothing is claimed about the boundary either way.
+                    """
+            )
+        }
         return classify(
             id: id, mechanism: mechanism, operation: operation,
             arguments: arguments, rc: -1, err: err,
