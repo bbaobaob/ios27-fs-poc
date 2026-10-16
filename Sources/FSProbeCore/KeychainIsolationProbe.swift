@@ -368,8 +368,14 @@ public enum KeychainIsolationProbe {
         // answers. dlsym resolves what is really there; absence reads as an
         // unreadable group rather than a compile failure.
         typealias CreateTaskFn = @convention(c) (UnsafeRawPointer?) -> OpaquePointer?
+        // The key is a CFString OBJECT, not a C string: the callee reads an
+        // isa pointer out of it, so a char buffer in its place dereferences
+        // attacker-shaped memory and the caller dies with SIGSEGV. That is not
+        // hypothetical -- it is what the first version of this binding did on
+        // the macOS runner. OpaquePointer carries the object without claiming
+        // a type the binding cannot prove.
         typealias CopyEntitlementFn = @convention(c) (
-            OpaquePointer?, UnsafePointer<CChar>, UnsafeMutableRawPointer?
+            OpaquePointer?, OpaquePointer?, UnsafeMutableRawPointer?
         ) -> Unmanaged<CFString>?
         guard let createPtr = POSIXShim.lookupSymbol("SecTaskCreateFromSelf"),
               let copyPtr = POSIXShim.lookupSymbol("SecTaskCopyValueForEntitlement")
@@ -379,8 +385,10 @@ public enum KeychainIsolationProbe {
         // The allocator is nil (the default); the error-out pointer is nil
         // (errors surface as a nil return, which is all this caller needs).
         guard let task = createTask(nil) else { return nil }
-        guard let value = "application-identifier".withCString({
-            copyEntitlement(task, $0, nil)
+        let key: CFString = "application-identifier" as CFString
+        let keyPtr = Unmanaged.passUnretained(key).toOpaque()
+        guard let value = withExtendedLifetime(key, {
+            copyEntitlement(task, keyPtr, nil)
         }) else { return nil }
         // Retained by the call; taken into ARC once, which owns it after.
         return value.takeRetainedValue() as String

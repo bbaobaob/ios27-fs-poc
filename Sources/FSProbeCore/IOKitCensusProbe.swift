@@ -373,7 +373,12 @@ final class IOKitShim: Sendable {
     /// by the call on success and released here on failure, so neither path
     /// leaks it and neither path frees what the kernel owns.
     func matchingServices(className: String) -> MatchOutcome {
-        guard let mainPort: MainPortFn = symbol("IOMainPort"),
+        // IOMainPort is the modern entry point; IOMasterPort is its
+        // predecessor, and either may be the one a given OS ships. Trying
+        // both in order keeps one renamed symbol from reading as a refusal.
+        let mainPort: MainPortFn? =
+            symbol("IOMainPort") ?? symbol("IOMasterPort")
+        guard let mainPort,
               let matching: MatchingFn = symbol("IOServiceMatching"),
               let getMatching: GetMatchingFn = symbol("IOServiceGetMatchingServices")
         else {
