@@ -213,13 +213,21 @@ public enum SpotlightEnumerationProbe {
     }
 
     /// Everything the index admits to, sorted by container membership.
+    ///
+    /// The predicate is a name match-all, not TRUEPREDICATE: NSMetadataQuery
+    /// rejects TRUEPREDICATE outright (NSInvalidArgumentException, measured on
+    /// the macOS runner), so "everything" is spelled as "every named item".
+    /// Items without a filesystem name are outside what this question can ask
+    /// -- and that limitation is stated here rather than hidden, because a
+    /// broad query that silently covers less than "all" would overclaim its
+    /// isolation verdict.
     private static func broadQuery(containerPath: String) -> Query {
         let id = "spotlight-broad-query"
-        let operation = "NSMetadataQuery(predicate: TRUEPREDICATE)"
-        let arguments = "all indexed items, sorted by container membership"
+        let operation = "NSMetadataQuery(predicate: kMDItemFSName LIKE *)"
+        let arguments = "all named indexed items, sorted by container membership"
 
         let found = gather(
-            predicate: NSPredicate(value: true),
+            predicate: NSPredicate(format: "%K LIKE %@", NSMetadataItemFSNameKey, "*"),
             timeout: gatherTimeout
         )
 
