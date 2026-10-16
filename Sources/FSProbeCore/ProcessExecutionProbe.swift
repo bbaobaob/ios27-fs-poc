@@ -207,9 +207,16 @@ public enum ProcessExecutionProbe {
             has never been tested here.
             """
 
+        // posix_spawn is one of the libc functions that RETURN the error number
+        // instead of setting errno: a nonzero return IS the errno, and errno
+        // itself is untouched. Reading currentErrno() here reported errno(0)
+        // for a call that had actually answered ENOENT -- which made the
+        // nonexistent-path control read as "otherError" instead of "notFound",
+        // destroying exactly the calibration the control exists to provide.
+        // The return value is therefore used as the errno directly.
         setErrno(0)
         let rc = runPosixSpawn(path)
-        let err = currentErrno()
+        let err = rc == 0 ? currentErrno() : Int32(rc)
 
         return classify(
             id: id, mechanism: mechanism, operation: operation,
@@ -421,7 +428,12 @@ public enum ProcessExecutionProbe {
     ///
     /// ENOENT and EPERM mean different things and must not be collapsed: one says
     /// the lookup ran and found nothing, the other says the policy refused it.
-    private static func classify(
+    ///
+    /// Exposed so tests can pin the mapping directly. The mapping is the whole
+    /// experiment -- a wrong row here is a wrong answer about the boundary, not
+    /// a crash -- and the simulator run that validates every commit cannot
+    /// exercise every row, because each platform only produces its own errnos.
+    static func classify(
         id: String,
         mechanism: String,
         operation: String,
@@ -437,9 +449,13 @@ public enum ProcessExecutionProbe {
         let outcome: Outcome
         switch err {
         case 0:
-            // system() returns a status rather than setting errno; a zero status
-            // means the command ran and succeeded.
-            outcome = (rc == 0 || rc == -1) ? .permitted : .otherError
+            // A zero errno with a zero return means the call succeeded. Anything
+            // else with a zero errno is unanswered, not permitted: no caller of
+            // this function returns -1 on success anymore (the one that did,
+            // system(), is recorded as a trap instead of called), so the
+            // legacy `rc == -1` arm was a landmine -- a failure shaped like
+            // success -- and it is removed rather than kept.
+            outcome = rc == 0 ? .permitted : .otherError
         case Int32(ENOENT):
             outcome = .notFound
         case Int32(EPERM):

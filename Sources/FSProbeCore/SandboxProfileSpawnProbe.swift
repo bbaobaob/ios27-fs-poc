@@ -333,11 +333,15 @@ public enum SandboxProfileSpawnProbe {
         }
         defer { _ = cSpawnAttrDestroy(&attributeStorage) }
 
+        // The setter is a posix_spawnattr function, which returns the error
+        // number instead of setting errno -- the same convention as posix_spawn
+        // itself. Reading errno here would report success's leftover zero for a
+        // call that had actually been refused.
         setErrno(0)
         let rc = name.withCString { cName in
-            setter(&attributeStorage, cName, Int(strlen(cName)))
+            setter(&attributeStorage, cName, strlen(cName))
         }
-        let err = currentErrno()
+        let err = rc == 0 ? currentErrno() : rc
 
         let permitted = rc == 0
         return Attempt(
@@ -411,7 +415,7 @@ public enum SandboxProfileSpawnProbe {
         defer { _ = cSpawnAttrDestroy(&attributeStorage) }
 
         let setRC = name.withCString { cName in
-            setter(&attributeStorage, cName, Int(strlen(cName)))
+            setter(&attributeStorage, cName, strlen(cName))
         }
         guard setRC == 0 else {
             return Attempt(
@@ -471,13 +475,17 @@ public enum SandboxProfileSpawnProbe {
         // out of step with the storage it was made from.
         var storage = attributeStorage
 
+        // posix_spawn returns the error number; errno is untouched. See the
+        // note in ProcessExecutionProbe for why reading errno here misreports
+        // every refusal.
         setErrno(0)
-        let rc = "/bin/sh".withCString { programPath in
+        let spawnRC: Int32 = "/bin/sh".withCString { programPath in
             withUnsafePointer(to: &storage) { attributePointer in
                 posix_spawn(&pid, programPath, nil, attributePointer, argv, environment)
             }
         }
-        let err = currentErrno()
+        let rc = Int(spawnRC)
+        let err = spawnRC == 0 ? currentErrno() : spawnRC
 
         if rc == 0 {
             // Reap it immediately: the command does nothing and exits zero.

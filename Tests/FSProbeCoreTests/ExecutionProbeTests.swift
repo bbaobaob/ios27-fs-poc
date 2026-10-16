@@ -72,6 +72,30 @@ final class ExecutionProbeTests: XCTestCase {
         XCTAssertFalse(result.violations.contains { $0.id == "system-true" })
     }
 
+    func testClassifyMapsReturnCodesToOutcomes() {
+        // The mapping is the whole experiment, so it is pinned directly: every
+        // platform only produces its own errnos at runtime, and a wrong row here
+        // is a wrong answer about the boundary. In particular ENOENT and EPERM
+        // must never collapse -- one calibrates the control, the other names a
+        // policy refusal -- and (rc != 0, err == 0) must never read as
+        // permitted, because posix_spawn-family calls return the error number
+        // and leave errno at zero.
+        func outcome(rc: Int, err: Int32) -> ProcessExecutionProbe.Outcome {
+            ProcessExecutionProbe.classify(
+                id: "case", mechanism: "m", operation: "o", arguments: "a",
+                rc: rc, err: err, expectedDenied: true, expected: "e",
+                permittedMeaning: "p", deniedMeaning: "d", notFoundMeaning: "n"
+            ).outcome
+        }
+        XCTAssertEqual(outcome(rc: 0, err: 0), .permitted)
+        XCTAssertEqual(outcome(rc: 2, err: 2), .notFound)   // ENOENT
+        XCTAssertEqual(outcome(rc: 1, err: 1), .denied)     // EPERM
+        XCTAssertEqual(outcome(rc: 13, err: 13), .denied)   // EACCES
+        XCTAssertEqual(outcome(rc: -1, err: 0), .otherError)  // unanswered, never permitted
+        XCTAssertEqual(outcome(rc: 2, err: 0), .otherError)  // returned errno, errno untouched
+        XCTAssertEqual(outcome(rc: 1, err: 0), .otherError)
+    }
+
     func testViolationListMatchesPerSpawnFlags() {
         let result = ProcessExecutionProbe.probe()
         let flagged = Set(result.spawns.filter { $0.isBoundaryViolation }.map { $0.id })
