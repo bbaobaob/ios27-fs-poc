@@ -1,0 +1,810 @@
+FSProbe capability matrix
+platform: iOS 26.2
+build:    24G830
+device:   arm64
+process:  /Users/runner/Library/Developer/CoreSimulator/Devices/E952A9B0-CC78-435C-BF08-06AD47FE1076/data/Containers/Bundle/Application/9EDFA7E8-3F2A-4944-9356-5DB0DB2B3A04/FSProbe.app/FSProbe
+captured: 2026-10-16T01:14:12Z
+
+path                         lstat        stat         opendir      readdir      open+read    open+create  open+write   unlink       readlink    
+-------------------------------------------------------------------------------------------------------------------------------------------------
+
+Ancestor ascent (read-only: lstat / opendir / readdir):
+  0 /Users/runner/Library/Developer/CoreSimulator/Devices/E952A9B0-CC78-435C-BF08-06AD47FE1076/data/Containers/Data/Application/52BA5E49-2541-4E36-A112-806C04D467F7 — visible (7 entries)
+  1 /Users/runner/Library/Developer/CoreSimulator/Devices/E952A9B0-CC78-435C-BF08-06AD47FE1076/data/Containers/Data/Application — visible (145 entries)
+  2 /Users/runner/Library/Developer/CoreSimulator/Devices/E952A9B0-CC78-435C-BF08-06AD47FE1076/data/Containers/Data — visible (6 entries)
+  3 /Users/runner/Library/Developer/CoreSimulator/Devices/E952A9B0-CC78-435C-BF08-06AD47FE1076/data/Containers — visible (7 entries)
+  4 /Users/runner/Library/Developer/CoreSimulator/Devices/E952A9B0-CC78-435C-BF08-06AD47FE1076/data — visible (12 entries)
+  5 /Users/runner/Library/Developer/CoreSimulator/Devices/E952A9B0-CC78-435C-BF08-06AD47FE1076 — visible (5 entries)
+  6 /Users/runner/Library/Developer/CoreSimulator/Devices — visible (135 entries)
+  7 /Users/runner/Library/Developer/CoreSimulator — visible (5 entries)
+
+Sandbox profile (read from the app's own container metadata):
+  readable:        true
+  metadata size:   523 bytes
+  identifier:      com.bbaobaob.fsprobe
+  metadata keys:   MCMMetadataActiveDPClass, MCMMetadataContentClass, MCMMetadataCreator, MCMMetadataIdentifier, MCMMetadataInfo, MCMMetadataSchemaVersion, MCMMetadataUUID, MCMMetadataUserIdentity, MCMMetadataVersion
+  MCMMetadataInfo: com.apple.MobileInstallation.ContentProtectionClass
+  has profile:     false
+  parses as plist: false
+  writable:        true
+  note:            Metadata plist read (523 bytes) but it carries no SandboxProfileData. Keys present: MCMMetadataActiveDPClass, MCMMetadataContentClass, MCMMetadataCreator, MCMMetadataIdentifier, MCMMetadataInfo, MCMMetadataSchemaVersion, MCMMetadataUUID, MCMMetadataUserIdentity, MCMMetadataVersion.The metadata file accepted an O_WRONLY open (nothing was written).
+
+Container write boundary (synthetic file, verified, removed):
+  container: /Users/runner/Library/Developer/CoreSimulator/Devices/E952A9B0-CC78-435C-BF08-06AD47FE1076/data/Containers/Data/Application/52BA5E49-2541-4E36-A112-806C04D467F7
+  0 /Users/runner/Library/Developer/CoreSimulator/Devices/E952A9B0-CC78-435C-BF08-06AD47FE1076/data/Containers/Data/Application/52BA5E49-2541-4E36-A112-806C04D467F7 — WRITABLE mode=40755 entries=7
+      read-back matched: true, removed: true
+  1 /Users/runner/Library/Developer/CoreSimulator/Devices/E952A9B0-CC78-435C-BF08-06AD47FE1076/data/Containers/Data/Application/52BA5E49-2541-4E36-A112-806C04D467F7/Documents — WRITABLE mode=40755 entries=4
+      read-back matched: true, removed: true
+  1 /Users/runner/Library/Developer/CoreSimulator/Devices/E952A9B0-CC78-435C-BF08-06AD47FE1076/data/Containers/Data/Application/52BA5E49-2541-4E36-A112-806C04D467F7/Library — WRITABLE mode=40755 entries=6
+      read-back matched: true, removed: true
+  1 /Users/runner/Library/Developer/CoreSimulator/Devices/E952A9B0-CC78-435C-BF08-06AD47FE1076/data/Containers/Data/Application/52BA5E49-2541-4E36-A112-806C04D467F7/SystemData — WRITABLE mode=40755 entries=2
+      read-back matched: true, removed: true
+  1 /Users/runner/Library/Developer/CoreSimulator/Devices/E952A9B0-CC78-435C-BF08-06AD47FE1076/data/Containers/Data/Application/52BA5E49-2541-4E36-A112-806C04D467F7/tmp — WRITABLE mode=40755 entries=2
+      read-back matched: true, removed: true
+  2 /Users/runner/Library/Developer/CoreSimulator/Devices/E952A9B0-CC78-435C-BF08-06AD47FE1076/data/Containers/Data/Application/52BA5E49-2541-4E36-A112-806C04D467F7/Library/Caches — WRITABLE mode=40755 entries=3
+      read-back matched: true, removed: true
+  2 /Users/runner/Library/Developer/CoreSimulator/Devices/E952A9B0-CC78-435C-BF08-06AD47FE1076/data/Containers/Data/Application/52BA5E49-2541-4E36-A112-806C04D467F7/Library/Preferences — WRITABLE mode=40755 entries=2
+      read-back matched: true, removed: true
+  2 /Users/runner/Library/Developer/CoreSimulator/Devices/E952A9B0-CC78-435C-BF08-06AD47FE1076/data/Containers/Data/Application/52BA5E49-2541-4E36-A112-806C04D467F7/Library/Saved Application State — WRITABLE mode=40755 entries=3
+      read-back matched: true, removed: true
+  2 /Users/runner/Library/Developer/CoreSimulator/Devices/E952A9B0-CC78-435C-BF08-06AD47FE1076/data/Containers/Data/Application/52BA5E49-2541-4E36-A112-806C04D467F7/Library/SplashBoard — WRITABLE mode=40755 entries=3
+      read-back matched: true, removed: true
+  writable:                /Users/runner/Library/Developer/CoreSimulator/Devices/E952A9B0-CC78-435C-BF08-06AD47FE1076/data/Containers/Data/Application/52BA5E49-2541-4E36-A112-806C04D467F7, /Users/runner/Library/Developer/CoreSimulator/Devices/E952A9B0-CC78-435C-BF08-06AD47FE1076/data/Containers/Data/Application/52BA5E49-2541-4E36-A112-806C04D467F7/Documents, /Users/runner/Library/Developer/CoreSimulator/Devices/E952A9B0-CC78-435C-BF08-06AD47FE1076/data/Containers/Data/Application/52BA5E49-2541-4E36-A112-806C04D467F7/Library, /Users/runner/Library/Developer/CoreSimulator/Devices/E952A9B0-CC78-435C-BF08-06AD47FE1076/data/Containers/Data/Application/52BA5E49-2541-4E36-A112-806C04D467F7/SystemData, /Users/runner/Library/Developer/CoreSimulator/Devices/E952A9B0-CC78-435C-BF08-06AD47FE1076/data/Containers/Data/Application/52BA5E49-2541-4E36-A112-806C04D467F7/tmp, /Users/runner/Library/Developer/CoreSimulator/Devices/E952A9B0-CC78-435C-BF08-06AD47FE1076/data/Containers/Data/Application/52BA5E49-2541-4E36-A112-806C04D467F7/Library/Caches, /Users/runner/Library/Developer/CoreSimulator/Devices/E952A9B0-CC78-435C-BF08-06AD47FE1076/data/Containers/Data/Application/52BA5E49-2541-4E36-A112-806C04D467F7/Library/Preferences, /Users/runner/Library/Developer/CoreSimulator/Devices/E952A9B0-CC78-435C-BF08-06AD47FE1076/data/Containers/Data/Application/52BA5E49-2541-4E36-A112-806C04D467F7/Library/Saved Application State, /Users/runner/Library/Developer/CoreSimulator/Devices/E952A9B0-CC78-435C-BF08-06AD47FE1076/data/Containers/Data/Application/52BA5E49-2541-4E36-A112-806C04D467F7/Library/SplashBoard
+  readable but not writable: 
+
+APFS clone across the boundary (a copy by inode):
+  sources tried: /usr/lib/dyld
+  [denied] clone-read-inward
+      clonefile()  args: /usr/lib/dyld -> /Users/runner/Library/Developer/CoreSimulator/Devices/E952A9B0-CC78-435C-BF08-06AD47FE1076/data/Containers/Data/Application/52BA5E49-2541-4E36-A112-806C04D467F7/Documents/fsprobe-clone-inward.bin
+      errno: EXDEV (18)
+      result: Refused with EXDEV.
+  [permitted] clone-write-outward  <-- BOUNDARY VIOLATION
+      clonefile()  args: /Users/runner/Library/Developer/CoreSimulator/Devices/E952A9B0-CC78-435C-BF08-06AD47FE1076/data/Containers/Data/Application/52BA5E49-2541-4E36-A112-806C04D467F7/Documents/fsprobe-clone-source.bin -> /var/tmp/fsprobe-clone-outward.tmp
+      result: A file was cloned to a location outside the app container, and was found there.
+  VIOLATIONS: clone-write-outward
+
+XPC service reachability:
+  NOT_ATTEMPTED: no mach service was opened, named, or probed.
+  8 candidate services were identified and recorded as the attack surface; none could be probed.
+  reason (an SDK availability fact, not a measurement): NSXPCConnection(machServiceName:) is API_UNAVAILABLE(ios, watchos, tvos) and the C connection API is likewise unavailable, so an app cannot open a mach service by name on iOS.
+
+NSFileCoordinator as a confused deputy:
+  [permitted] coordinator-control
+      NSFileCoordinator.coordinate(readingItemAt:)  args: /Users/runner/Library/Developer/CoreSimulator/Devices/E952A9B0-CC78-435C-BF08-06AD47FE1076/data/Containers/Data/Application/52BA5E49-2541-4E36-A112-806C04D467F7/Documents/fsprobe-fc-control
+      result: Coordination succeeded (accessor ran: true, 28 bytes read). 28 bytes were read inside the accessor, which is the security-relevant effect: content from a path the caller cannot open was obtained.
+  [grantedNoEffect] coordinator-read-outside
+      NSFileCoordinator.coordinate(readingItemAt:)  args: /var/mobile/Library
+      error: NSCocoaErrorDomain 4
+      result: Coordination succeeded (accessor ran: true, 0 bytes read). Coordination was granted, but the read underneath failed with NSCocoaErrorDomain 4: The file “Library” doesn’t exist. Coordination is not authorization, so this is the expected shape and is not a read primitive.
+  [grantedNoEffect] coordinator-write-outside
+      NSFileCoordinator.coordinate(writingItemAt:)  args: /var/mobile/Library/fsprobe-writetest.tmp
+      error: NSCocoaErrorDomain 4
+      result: Coordination succeeded (accessor ran: true) but no file appeared at the destination: the write was refused underneath with NSCocoaErrorDomain 4. Coordination is not authorization, so this is the expected shape and is not a write primitive.
+  no coordination succeeded where the policy predicts refusal
+
+Mach service reachability (connection factory resolved at runtime):
+  connection factory resolved in 8 of 8 attempts (symbol presence is not a permission)
+  negative control (com.bbaobaob.fsprobe.nonexistent.control): reachable
+  [reachable] com.apple.FileCoordination 3001ms
+  [reachable] com.apple.cfprefsd.daemon 3006ms
+  [reachable] com.apple.containermanagerd 3008ms
+  [reachable] com.apple.containermanagerd.system 3001ms
+  [reachable] com.apple.coreservices.quarantine-resolver 1ms
+  [reachable] com.apple.mobile.installation_proxy 0ms
+  [reachable] com.apple.LaunchServices 0ms
+  8 candidate(s) answered a connection carrying no protocol
+  note: reachability is reconnaissance, not a finding. A finding
+        requires an effect the caller was not authorized to produce.
+
+Cross-process introspection:
+  the self-targeting control succeeded, so the results below are interpretable
+  [succeeded] proc_pidpath -> self (pid 14824) [control]
+      return: 182 bytes
+      observed: /Users/runner/Library/Developer/CoreSimulator/Devices/E952A9B0-CC78-435C-BF08-06AD47FE1076/data/Containers/Bundle/Application/9EDFA7E8-3F2A-4944-9356-5DB0DB2B3A04/FSProbe.app/FSProbe
+      result: The control succeeded: this process can read its own executable path. Refusals below are therefore interpretable as denials rather than as a broken API.
+  [succeeded] proc_pidpath -> launchd (pid 1)
+      return: 13 bytes
+      observed: /sbin/launchd
+      result: The executable path of a protected process was disclosed to an ordinary app. That is an information disclosure beyond the caller's own process.
+  [denied] proc_pidpath -> kernel (pid 0)
+      return: 0 bytes
+      error: ESRCH
+      result: Refused (ESRCH). The path of a process other than the caller is not disclosed, which is the expected boundary.
+  [denied] task_for_pid -> launchd (pid 1)
+      return: kern_return_t 5
+      error: (os/kern) failure
+      result: Refused. The kernel did not hand out a task port for another process, which is the expected boundary; task_for_pid normally requires the task_for_pid-allow entitlement.
+  [denied] task_for_pid -> kernel (pid 0)
+      return: kern_return_t 5
+      error: (os/kern) failure
+      result: Refused. The kernel did not hand out a task port for another process, which is the expected boundary; task_for_pid normally requires the task_for_pid-allow entitlement.
+  [succeeded] proc_listallpids -> all processes
+      return: 194 pids
+      observed: 194 pids visible
+      result: 194 process identifiers are visible. Visibility of identifiers alone is not a boundary violation; it becomes one only if those identifiers yield something the policy withholds, which is what the attempts above test.
+  VIOLATIONS: proc_pidpath|launchd (pid 1)
+
+cfprefsd as a confused deputy (UserDefaults suite resolution):
+  [contained] prefs-control-own-suite
+      UserDefaults(suiteName:).set + synchronize  args: suite=com.bbaobaob.fsprobe.deputy-control, key=fsprobe-deputy-probe
+      observed: new file(s) in this container: com.bbaobaob.fsprobe.deputy-control.plist
+      result: The write reported success and the file appeared in this container, named after the suite. The daemon resolved the name against the caller's own container, which is the expected policy: the suite name is a domain label, not a location.
+  [contained] prefs-foreign-suite
+      UserDefaults(suiteName:).set + synchronize  args: suite=group.com.example.deputy-probe-target, key=fsprobe-deputy-probe
+      observed: new file(s) in this container: group.com.example.deputy-probe-target.plist
+      result: The write reported success and the file appeared in this container, named after the suite. The daemon resolved the name against the caller's own container, which is the expected policy: the suite name is a domain label, not a location.
+  every write landed inside this container, as the policy predicts
+
+Untested sandbox operation classes:
+  [denied] mkdir-/var/mobile/Library
+      mkdir(path, 0755)  args: /var/mobile/Library/fsprobe-opclass-mkdir
+      errno: ENOENT
+      observed: mkdir was refused. control mkdir inside the container succeeded.
+      result: Refused with ENOENT, the sandbox signature. The control succeeded, so this is a policy denial rather than a broken operation.
+  [denied] symlink-/var/mobile/Library
+      symlink(target, linkpath)  args: / -> /var/mobile/Library/fsprobe-opclass-symlink
+      errno: ENOENT
+      observed: symlink was refused. control symlink inside the container succeeded.
+      result: Refused with ENOENT, the sandbox signature. The control succeeded, so this is a policy denial rather than a broken operation.
+  [denied] mkfifo-/var/mobile/Library
+      mkfifo(path, 0644)  args: /var/mobile/Library/fsprobe-opclass-fifo
+      errno: ENOENT
+      observed: mkfifo was refused. control mkfifo inside the container succeeded.
+      result: Refused with ENOENT, the sandbox signature. The control succeeded, so this is a policy denial rather than a broken operation.
+  [denied] link-reverse-destination-/var/mobile/Library
+      link(existing, new)  args: /Users/runner/Library/Developer/CoreSimulator/Devices/E952A9B0-CC78-435C-BF08-06AD47FE1076/data/Containers/Data/Application/52BA5E49-2541-4E36-A112-806C04D467F7/Documents/fsprobe-opclass-linksource -> /var/mobile/Library/fsprobe-opclass-linkreverse
+      errno: ENOENT
+      observed: link was refused. control link inside the container succeeded.
+      result: Refused with ENOENT, the sandbox signature. The control succeeded, so this is a policy denial rather than a broken operation.
+  [denied] mkdir-/var/mobile/Media
+      mkdir(path, 0755)  args: /var/mobile/Media/fsprobe-opclass-mkdir
+      errno: ENOENT
+      observed: mkdir was refused. control mkdir inside the container succeeded.
+      result: Refused with ENOENT, the sandbox signature. The control succeeded, so this is a policy denial rather than a broken operation.
+  [denied] symlink-/var/mobile/Media
+      symlink(target, linkpath)  args: / -> /var/mobile/Media/fsprobe-opclass-symlink
+      errno: ENOENT
+      observed: symlink was refused. control symlink inside the container succeeded.
+      result: Refused with ENOENT, the sandbox signature. The control succeeded, so this is a policy denial rather than a broken operation.
+  [denied] mkfifo-/var/mobile/Media
+      mkfifo(path, 0644)  args: /var/mobile/Media/fsprobe-opclass-fifo
+      errno: ENOENT
+      observed: mkfifo was refused. control mkfifo inside the container succeeded.
+      result: Refused with ENOENT, the sandbox signature. The control succeeded, so this is a policy denial rather than a broken operation.
+  [denied] link-reverse-destination-/var/mobile/Media
+      link(existing, new)  args: /Users/runner/Library/Developer/CoreSimulator/Devices/E952A9B0-CC78-435C-BF08-06AD47FE1076/data/Containers/Data/Application/52BA5E49-2541-4E36-A112-806C04D467F7/Documents/fsprobe-opclass-linksource -> /var/mobile/Media/fsprobe-opclass-linkreverse
+      errno: ENOENT
+      observed: link was refused. control link inside the container succeeded.
+      result: Refused with ENOENT, the sandbox signature. The control succeeded, so this is a policy denial rather than a broken operation.
+  no operation class succeeded where the policy predicts refusal
+
+Read primitives that do not open the file:
+  [notAttempted] getxattr-/var/mobile/Library
+      getxattr(path, name, NULL, 0, 0, 0)  args: /var/mobile/Library
+      observed: the path does not exist here
+      result: NOT ATTEMPTED: this path is an iOS location and does not exist on                 this platform. An ENOENT here would say nothing about the sandbox,                 so the experiment is withheld rather than reported as an absence                 finding.
+  [notAttempted] listxattr-/var/mobile/Library
+      listxattr(path, NULL, 0, 0)  args: /var/mobile/Library
+      observed: the path does not exist here
+      result: NOT ATTEMPTED: this path is an iOS location and does not exist on                 this platform. An ENOENT here would say nothing about the sandbox,                 so the experiment is withheld rather than reported as an absence                 finding.
+  [notAttempted] getattrlist-/var/mobile/Library
+      getattrlist(path, &attrlist, buf, size, 0)  args: /var/mobile/Library
+      observed: the path does not exist here
+      result: NOT ATTEMPTED: this path is an iOS location and does not exist on                 this platform. An ENOENT here would say nothing about the sandbox,                 so the experiment is withheld rather than reported as an absence                 finding.
+  [notAttempted] statfs-/var/mobile/Library
+      statfs64(path, &buf)  args: /var/mobile/Library
+      observed: the path does not exist here
+      result: NOT ATTEMPTED: this path is an iOS location and does not exist on                 this platform. An ENOENT here would say nothing about the sandbox,                 so the experiment is withheld rather than reported as an absence                 finding.
+  [notAttempted] getxattr-/var/mobile/Media
+      getxattr(path, name, NULL, 0, 0, 0)  args: /var/mobile/Media
+      observed: the path does not exist here
+      result: NOT ATTEMPTED: this path is an iOS location and does not exist on                 this platform. An ENOENT here would say nothing about the sandbox,                 so the experiment is withheld rather than reported as an absence                 finding.
+  [notAttempted] listxattr-/var/mobile/Media
+      listxattr(path, NULL, 0, 0)  args: /var/mobile/Media
+      observed: the path does not exist here
+      result: NOT ATTEMPTED: this path is an iOS location and does not exist on                 this platform. An ENOENT here would say nothing about the sandbox,                 so the experiment is withheld rather than reported as an absence                 finding.
+  [notAttempted] getattrlist-/var/mobile/Media
+      getattrlist(path, &attrlist, buf, size, 0)  args: /var/mobile/Media
+      observed: the path does not exist here
+      result: NOT ATTEMPTED: this path is an iOS location and does not exist on                 this platform. An ENOENT here would say nothing about the sandbox,                 so the experiment is withheld rather than reported as an absence                 finding.
+  [notAttempted] statfs-/var/mobile/Media
+      statfs64(path, &buf)  args: /var/mobile/Media
+      observed: the path does not exist here
+      result: NOT ATTEMPTED: this path is an iOS location and does not exist on                 this platform. An ENOENT here would say nothing about the sandbox,                 so the experiment is withheld rather than reported as an absence                 finding.
+  every read primitive was refused where the policy predicts refusal
+
+Primitives reachable through a descriptor:
+  [notAttempted] open-evtonly-/var/mobile/Library
+      open(path, O_EVTONLY)  args: /var/mobile/Library
+      observed: the path does not exist here
+      result: NOT ATTEMPTED: this path is an iOS location and does not exist on this platform. Running it would produce ENOENT and say nothing about the sandbox.
+  [notAttempted] fgetattrlist-fd-/var/mobile/Library
+      fgetattrlist(fd, &alist, buf, size, 0)  args: /var/mobile/Library
+      observed: the path does not exist here
+      result: NOT ATTEMPTED: this path is an iOS location and does not exist on this platform. Running it would produce ENOENT and say nothing about the sandbox.
+  [notAttempted] getdirentriesattr-fd-/var/mobile/Library
+      getdirentriesattr(fd, ...)  args: /var/mobile/Library
+      observed: the path does not exist here
+      result: NOT ATTEMPTED: this path is an iOS location and does not exist on this platform. Running it would produce ENOENT and say nothing about the sandbox.
+  [notAttempted] fgetxattr-fd-/var/mobile/Library
+      fgetxattr(fd, name, NULL, 0, 0, 0)  args: /var/mobile/Library
+      observed: the path does not exist here
+      result: NOT ATTEMPTED: this path is an iOS location and does not exist on this platform. Running it would produce ENOENT and say nothing about the sandbox.
+  [notAttempted] open-evtonly-/var/mobile/Media
+      open(path, O_EVTONLY)  args: /var/mobile/Media
+      observed: the path does not exist here
+      result: NOT ATTEMPTED: this path is an iOS location and does not exist on this platform. Running it would produce ENOENT and say nothing about the sandbox.
+  [notAttempted] fgetattrlist-fd-/var/mobile/Media
+      fgetattrlist(fd, &alist, buf, size, 0)  args: /var/mobile/Media
+      observed: the path does not exist here
+      result: NOT ATTEMPTED: this path is an iOS location and does not exist on this platform. Running it would produce ENOENT and say nothing about the sandbox.
+  [notAttempted] getdirentriesattr-fd-/var/mobile/Media
+      getdirentriesattr(fd, ...)  args: /var/mobile/Media
+      observed: the path does not exist here
+      result: NOT ATTEMPTED: this path is an iOS location and does not exist on this platform. Running it would produce ENOENT and say nothing about the sandbox.
+  [notAttempted] fgetxattr-fd-/var/mobile/Media
+      fgetxattr(fd, name, NULL, 0, 0, 0)  args: /var/mobile/Media
+      observed: the path does not exist here
+      result: NOT ATTEMPTED: this path is an iOS location and does not exist on this platform. Running it would produce ENOENT and say nothing about the sandbox.
+  no descriptor primitive succeeded where the policy predicts refusal
+
+The same boundary through Foundation rather than libc:
+  [notAttempted] access-read-/var/mobile/Library
+      Foundation/access API  args: /var/mobile/Library
+      observed: the path does not exist here
+      result: NOT ATTEMPTED: this path is an iOS location and does not exist on this platform. Running it would produce ENOENT and say nothing about the sandbox.
+  [notAttempted] access-write-/var/mobile/Library
+      Foundation/access API  args: /var/mobile/Library
+      observed: the path does not exist here
+      result: NOT ATTEMPTED: this path is an iOS location and does not exist on this platform. Running it would produce ENOENT and say nothing about the sandbox.
+  [notAttempted] access-execute-/var/mobile/Library
+      Foundation/access API  args: /var/mobile/Library
+      observed: the path does not exist here
+      result: NOT ATTEMPTED: this path is an iOS location and does not exist on this platform. Running it would produce ENOENT and say nothing about the sandbox.
+  [notAttempted] isReadableFile-/var/mobile/Library
+      Foundation/access API  args: /var/mobile/Library
+      observed: the path does not exist here
+      result: NOT ATTEMPTED: this path is an iOS location and does not exist on this platform. Running it would produce ENOENT and say nothing about the sandbox.
+  [notAttempted] isWritableFile-/var/mobile/Library
+      Foundation/access API  args: /var/mobile/Library
+      observed: the path does not exist here
+      result: NOT ATTEMPTED: this path is an iOS location and does not exist on this platform. Running it would produce ENOENT and say nothing about the sandbox.
+  [notAttempted] isDeletableFile-/var/mobile/Library
+      Foundation/access API  args: /var/mobile/Library
+      observed: the path does not exist here
+      result: NOT ATTEMPTED: this path is an iOS location and does not exist on this platform. Running it would produce ENOENT and say nothing about the sandbox.
+  [notAttempted] destinationOfSymbolicLink-/var/mobile/Library
+      Foundation/access API  args: /var/mobile/Library
+      observed: the path does not exist here
+      result: NOT ATTEMPTED: this path is an iOS location and does not exist on this platform. Running it would produce ENOENT and say nothing about the sandbox.
+  [notAttempted] access-read-/var/mobile/Media
+      Foundation/access API  args: /var/mobile/Media
+      observed: the path does not exist here
+      result: NOT ATTEMPTED: this path is an iOS location and does not exist on this platform. Running it would produce ENOENT and say nothing about the sandbox.
+  [notAttempted] access-write-/var/mobile/Media
+      Foundation/access API  args: /var/mobile/Media
+      observed: the path does not exist here
+      result: NOT ATTEMPTED: this path is an iOS location and does not exist on this platform. Running it would produce ENOENT and say nothing about the sandbox.
+  [notAttempted] access-execute-/var/mobile/Media
+      Foundation/access API  args: /var/mobile/Media
+      observed: the path does not exist here
+      result: NOT ATTEMPTED: this path is an iOS location and does not exist on this platform. Running it would produce ENOENT and say nothing about the sandbox.
+  [notAttempted] isReadableFile-/var/mobile/Media
+      Foundation/access API  args: /var/mobile/Media
+      observed: the path does not exist here
+      result: NOT ATTEMPTED: this path is an iOS location and does not exist on this platform. Running it would produce ENOENT and say nothing about the sandbox.
+  [notAttempted] isWritableFile-/var/mobile/Media
+      Foundation/access API  args: /var/mobile/Media
+      observed: the path does not exist here
+      result: NOT ATTEMPTED: this path is an iOS location and does not exist on this platform. Running it would produce ENOENT and say nothing about the sandbox.
+  [notAttempted] isDeletableFile-/var/mobile/Media
+      Foundation/access API  args: /var/mobile/Media
+      observed: the path does not exist here
+      result: NOT ATTEMPTED: this path is an iOS location and does not exist on this platform. Running it would produce ENOENT and say nothing about the sandbox.
+  [notAttempted] destinationOfSymbolicLink-/var/mobile/Media
+      Foundation/access API  args: /var/mobile/Media
+      observed: the path does not exist here
+      result: NOT ATTEMPTED: this path is an iOS location and does not exist on this platform. Running it would produce ENOENT and say nothing about the sandbox.
+  [refused] containerURL-app-group
+      NSFileManager.containerURL(forSecurityApplicationGroupIdentifier:)  args: group=group.com.example.deputy-probe-target
+      observed: returned nil
+      result: Refused. The daemon did not resolve a group reference for an app holding no app-group entitlement, so the confused-deputy hypothesis for containermanagerd is falsified for this identifier.
+  no Foundation API reported access the direct calls refused
+
+Mach service lookup by a path other than the XPC factory:
+  bootstrap port available: false
+  [notAttempted] com.bbaobaob.fsprobe.nonexistent.control  (XPC: refused)
+      result: NOT ATTEMPTED: task_get_bootstrap_port and/or bootstrap_look_up are not present on this platform, so no lookup was made. This is a statement about the platform, not a denial.
+  [notAttempted] com.apple.FileCoordination  (XPC: reachable)
+      result: NOT ATTEMPTED: task_get_bootstrap_port and/or bootstrap_look_up are not present on this platform, so no lookup was made. This is a statement about the platform, not a denial.
+  [notAttempted] com.apple.cfprefsd.daemon  (XPC: reachable)
+      result: NOT ATTEMPTED: task_get_bootstrap_port and/or bootstrap_look_up are not present on this platform, so no lookup was made. This is a statement about the platform, not a denial.
+  [notAttempted] com.apple.containermanagerd  (XPC: reachable)
+      result: NOT ATTEMPTED: task_get_bootstrap_port and/or bootstrap_look_up are not present on this platform, so no lookup was made. This is a statement about the platform, not a denial.
+  [notAttempted] com.apple.containermanagerd.system  (XPC: reachable)
+      result: NOT ATTEMPTED: task_get_bootstrap_port and/or bootstrap_look_up are not present on this platform, so no lookup was made. This is a statement about the platform, not a denial.
+  [notAttempted] com.apple.coreservices.quarantine-resolver  (XPC: refused)
+      result: NOT ATTEMPTED: task_get_bootstrap_port and/or bootstrap_look_up are not present on this platform, so no lookup was made. This is a statement about the platform, not a denial.
+  [notAttempted] com.apple.mobile.installation_proxy  (XPC: refused)
+      result: NOT ATTEMPTED: task_get_bootstrap_port and/or bootstrap_look_up are not present on this platform, so no lookup was made. This is a statement about the platform, not a denial.
+  [notAttempted] com.apple.LaunchServices  (XPC: refused)
+      result: NOT ATTEMPTED: task_get_bootstrap_port and/or bootstrap_look_up are not present on this platform, so no lookup was made. This is a statement about the platform, not a denial.
+  NOT_ATTEMPTED: no bootstrap port, so nothing was measured
+
+Primitives never tried before:
+  [answered] getfsstat-mount-count  <-- BOUNDARY VIOLATION
+      getfsstat(NULL, 0, MNT_NOWAIT)  args: count only, no buffer
+      return: 34
+      observed: 34 mounted filesystems reported
+      result: The mount table is readable. The count discloses how many volumes exist, which is mount topology beyond this app's own container. Not a read primitive on its own, but it is information the app should not hold.
+  [answered] mach-host-port  <-- BOUNDARY VIOLATION
+      mach_host_self()  args: 
+      return: port 7171
+      observed: a host port was returned
+      result: A host port was returned to an ordinary app. That is the strongest possible Mach primitive and warrants immediate follow-up: with a host port, host_get_special_port and processor_set_tasks become reachable questions.
+  [answered] sysctl-hw-model
+      sysctlbyname(hw.model, ...)  args: hw.model
+      return: 0
+      observed: answered, 14 bytes
+      result: The MIB answered. Kernel state was read without touching the filesystem at all, so the filesystem sandbox does not govern this path.
+  [answered] sysctl-kern-bootargs  <-- BOUNDARY VIOLATION
+      sysctlbyname(kern.bootargs, ...)  args: kern.bootargs
+      return: 0
+      observed: answered, 1 bytes
+      result: The MIB answered. Kernel state was read without touching the filesystem at all, so the filesystem sandbox does not govern this path.
+  [answered] sysctl-sandbox-sentinel  <-- BOUNDARY VIOLATION
+      sysctlbyname(security.mac.sandbox.sentinel, ...)  args: security.mac.sandbox.sentinel
+      return: 0
+      observed: answered, 13 bytes
+      result: The MIB answered. Kernel state was read without touching the filesystem at all, so the filesystem sandbox does not govern this path.
+  [denied] copyfile-protected-source
+      copyfile(from, to, 0, 0)  args: /var/mobile/Library -> /Users/runner/Library/Developer/CoreSimulator/Devices/E952A9B0-CC78-435C-BF08-06AD47FE1076/data/Containers/Data/Application/52BA5E49-2541-4E36-A112-806C04D467F7/Documents/fsprobe-copyfile-target
+      return: -1
+      error: ENOENT
+      observed: refused
+      result: Refused. copyfile is confined the same way clonefile() is.
+  VIOLATIONS: getfsstat-mount-count, mach-host-port, sysctl-kern-bootargs, sysctl-sandbox-sentinel
+
+Volume-wide name search (searchfs):
+  [notAttempted] searchfs-var-mobile
+      searchfs(path, &searchblock, &nummatches, 0, 0, &state)  args: /var/mobile, pattern=fsprobe-nonexistent-probe-pattern
+      observed: the path does not exist on this platform
+      result: NOT ATTEMPTED: /var/mobile is an iOS location and does not exist on this platform. Running it would produce ENOENT and say nothing about the sandbox.
+  the volume-wide search was refused, as the policy predicts
+
+The Mach privilege ladder:
+  [permitted] task_get_special_port-host  <-- BOUNDARY VIOLATION
+      task_get_special_port(task, TASK_HOST_PORT, &port)  args: self
+      return: kern_return_t 0
+      observed: a host port was returned
+      result: A host port was obtained. That is the strongest Mach primitive and warrants immediate follow-up: host_get_special_port and processor_set_tasks become reachable questions with one.
+  [permitted] task_threads-self
+      task_threads(task, &list, &count)  args: self
+      return: kern_return_t 0
+      observed: 9 threads
+      result: The API works: this app can enumerate its own threads. That makes the task_for_pid refusal on other processes a policy denial rather than a broken call, which is what the process-isolation result depends on.
+  [permitted] task_info-self
+      task_info(task, TASK_DYLD_INFO, &info, &count)  args: self
+      return: kern_return_t 0
+      observed: 5 words
+      result: The API works on this app's own task.
+  VIOLATIONS: task_get_special_port-host
+
+Do the reachable services actually answer a message?
+  [replied] com.bbaobaob.fsprobe.nonexistent.control  (lookup: refused)
+      response: 0ms
+      reply shape: non-dictionary object
+      observed: a reply arrived
+      result: A reply arrived from a service that had received only an empty message from a caller it had not identified. That is the confused- deputy shape: the service performs work for a caller whose identity it has not validated, and the reply is the evidence to follow up.
+  [replied] com.apple.FileCoordination  (lookup: reachable)  <-- BOUNDARY VIOLATION
+      response: 1ms
+      reply shape: non-dictionary object
+      observed: a reply arrived
+      result: A reply arrived from a service that had received only an empty message from a caller it had not identified. That is the confused- deputy shape: the service performs work for a caller whose identity it has not validated, and the reply is the evidence to follow up.
+  [replied] com.apple.cfprefsd.daemon  (lookup: reachable)  <-- BOUNDARY VIOLATION
+      response: 0ms
+      reply shape: non-dictionary object
+      observed: a reply arrived
+      result: A reply arrived from a service that had received only an empty message from a caller it had not identified. That is the confused- deputy shape: the service performs work for a caller whose identity it has not validated, and the reply is the evidence to follow up.
+  [replied] com.apple.containermanagerd  (lookup: reachable)  <-- BOUNDARY VIOLATION
+      response: 0ms
+      reply shape: non-dictionary object
+      observed: a reply arrived
+      result: A reply arrived from a service that had received only an empty message from a caller it had not identified. That is the confused- deputy shape: the service performs work for a caller whose identity it has not validated, and the reply is the evidence to follow up.
+  [replied] com.apple.containermanagerd.system  (lookup: reachable)  <-- BOUNDARY VIOLATION
+      response: 2ms
+      reply shape: non-dictionary object
+      observed: a reply arrived
+      result: A reply arrived from a service that had received only an empty message from a caller it had not identified. That is the confused- deputy shape: the service performs work for a caller whose identity it has not validated, and the reply is the evidence to follow up.
+  [replied] com.apple.coreservices.quarantine-resolver  (lookup: refused)
+      response: 0ms
+      reply shape: non-dictionary object
+      observed: a reply arrived
+      result: A reply arrived from a service that had received only an empty message from a caller it had not identified. That is the confused- deputy shape: the service performs work for a caller whose identity it has not validated, and the reply is the evidence to follow up.
+  [replied] com.apple.mobile.installation_proxy  (lookup: refused)
+      response: 0ms
+      reply shape: non-dictionary object
+      observed: a reply arrived
+      result: A reply arrived from a service that had received only an empty message from a caller it had not identified. That is the confused- deputy shape: the service performs work for a caller whose identity it has not validated, and the reply is the evidence to follow up.
+  [replied] com.apple.LaunchServices  (lookup: refused)
+      response: 0ms
+      reply shape: non-dictionary object
+      observed: a reply arrived
+      result: A reply arrived from a service that had received only an empty message from a caller it had not identified. That is the confused- deputy shape: the service performs work for a caller whose identity it has not validated, and the reply is the evidence to follow up.
+  VIOLATIONS: com.apple.FileCoordination, com.apple.cfprefsd.daemon, com.apple.containermanagerd, com.apple.containermanagerd.system
+
+IPC surface reachable from an ordinary app:
+  [refused] cfmessageport-com.bbaobaob.fsprobe.nonexistent.control
+      CFMessagePortCreateRemote(name)  args: com.bbaobaob.fsprobe.nonexistent.control
+      observed: returned nil
+      result: Refused, consistent with the other lookup paths. The mach-lookup gate holds for this name on a third path as well.
+  [reachable] cfmessageport-com.apple.FileCoordination
+      CFMessagePortCreateRemote(name)  args: com.apple.FileCoordination
+      observed: resolved to a message port
+      result: Resolved, consistent with the XPC path, which also reached it.
+  [reachable] cfmessageport-com.apple.cfprefsd.daemon
+      CFMessagePortCreateRemote(name)  args: com.apple.cfprefsd.daemon
+      observed: resolved to a message port
+      result: Resolved, consistent with the XPC path, which also reached it.
+  [refused] cfmessageport-com.apple.LaunchServices
+      CFMessagePortCreateRemote(name)  args: com.apple.LaunchServices
+      observed: returned nil
+      result: Refused, consistent with the other lookup paths. The mach-lookup gate holds for this name on a third path as well.
+  [refused] cfmessageport-com.apple.mobile.installation_proxy
+      CFMessagePortCreateRemote(name)  args: com.apple.mobile.installation_proxy
+      observed: returned nil
+      result: Refused, consistent with the other lookup paths. The mach-lookup gate holds for this name on a third path as well.
+  [refused] darwin-notification
+      notify_register_dispatch(name, &token, queue)  args: com.bbaobaob.fsprobe.deputy-probe.notify
+      observed: registration failed
+      result: Registration failed. Darwin notifications are not available here, which removes one IPC mechanism from the surface.
+  no IPC mechanism reached a name the lookup paths refused
+
+Is an obtainable host port actually usable?
+  host port obtained: true
+  host port is impotent (every use refused with a validity error): false
+  [deniedByValidity] host-get-special-port
+      host_get_special_port(host, HOST_PORT, &port)
+      return: kern_return_t 4
+      error: (os/kern) invalid argument
+      observed: refused with (os/kern) invalid argument
+      result: Refused with a validity error. The kernel did not recognize the port as a host port at all, which means the port obtained earlier is a token that grants nothing.
+  [deniedByPolicy] host-processor-set-priv
+      host_processor_set_priv(host, &pset)
+      return: kern_return_t 268435466
+      error: (ipc/send) invalid port right
+      observed: refused with (ipc/send) invalid port right
+      result: Refused by policy. The host port is real and the kernel is enforcing a rule on it.
+  [deniedByPolicy] host-statistics
+      host_statistics(host, HOST_LOAD_INFO, &stats, &count)
+      return: kern_return_t 22
+      error: (os/kern) invalid host
+      observed: refused with (os/kern) invalid host
+      result: Refused by policy. The host port is real and the kernel is enforcing a rule on it.
+  the host port was refused by policy on every use
+
+Can an ordinary app enumerate every task on the device?
+  [permitted] task-threads-self
+      task_threads(task, &list, &count)
+      return: kern_return_t 0
+      tasks: 9
+      observed: 9 threads
+      result: The API works on this app's own task. A processor-set refusal below is therefore a policy denial.
+  [prerequisiteFailed] processor-set-tasks-default
+      processor_set_tasks(processor_set_default(), &tasks, &count)
+      return: kern_return_t 268435459
+      error: (ipc/send) invalid destination port
+      observed: the default processor set could not be obtained
+      result: NOT ATTEMPTED: the default processor set itself was unavailable, so the task list could not be requested.
+  [prerequisiteFailed] processor-set-tasks-privileged
+      processor_set_tasks(host_processor_set_priv(host), &tasks, &count)
+      return: kern_return_t 268435466
+      error: (ipc/send) invalid port right
+      observed: the privileged processor set could not be obtained
+      result: NOT ATTEMPTED: the privileged processor set was unavailable, so its task list could not be requested. Whether the host port is real is measured by the host-port module.
+  no processor set yielded a task list
+
+Can an ordinary app read another process's memory?
+  [permitted] mach-vm-read-self  -> self
+      mach_vm_read(mach_task_self_, <probe page>, 4096, &data, &count)
+      return: kern_return_t 0
+      bytes: 4096
+      observed: 4096 bytes read from this app's own memory
+      result: The API works on this app's own memory. A refusal on another process is therefore a policy denial.
+  [noTaskPort] mach-vm-read-launchd  -> launchd (pid 1)
+      mach_vm_read(task, <page>, 4096, &data, &count)
+      return: kern_return_t 5
+      error: (os/kern) failure
+      observed: no task port for the target
+      result: NOT ATTEMPTED: no task port was obtained for the target, which the cross-process experiment already established is refused. Without a port there is nothing to read through, so this call was never made.
+  [noTaskPort] vm-read-overwrite-launchd  -> launchd (pid 1)
+      vm_read_overwrite(task, <page>, 4096, buf, &count)
+      return: kern_return_t 5
+      error: (os/kern) failure
+      observed: no task port for the target
+      result: NOT ATTEMPTED: no task port was obtained for the target.
+  no foreign memory was readable
+
+What do the services that answer actually send back?
+  [emptyReply] com.apple.cfprefsd.daemon
+      observed: no keys in the reply
+      result: The reply carried no keys at all, so there is nothing to interpret.
+  [emptyReply] com.apple.containermanagerd
+      observed: no keys in the reply
+      result: The reply carried no keys at all, so there is nothing to interpret.
+  [emptyReply] com.apple.containermanagerd.system
+      observed: no keys in the reply
+      result: The reply carried no keys at all, so there is nothing to interpret.
+  no service replied with keys of its own
+
+Can an ordinary app execute a system binary?
+  [notFound] posix-spawn-nonexistent-control
+      posix_spawn(path, argv, NULL, NULL)  args: /usr/bin/fsprobe-nonexistent-binary (control)
+      return: 2
+      errno: ENOENT
+      observed: failed with ENOENT
+      result: The path was not there. This is the control's expected answer and it is what makes a refusal on a real binary interpretable.
+  [permitted] posix-spawn-/bin/sh  <-- BOUNDARY VIOLATION
+      posix_spawn(path, argv, NULL, NULL)  args: /bin/sh
+      return: 0
+      observed: the child ran and exited
+      result: A system binary was spawned. An ordinary app can execute code the platform shipped, which is the primitive every other escalation needs: it turns a read bug into a write bug and a write bug into code execution.
+  [permitted] posix-spawn-/usr/bin/true  <-- BOUNDARY VIOLATION
+      posix_spawn(path, argv, NULL, NULL)  args: /usr/bin/true
+      return: 0
+      observed: the child ran and exited
+      result: A system binary was spawned. An ordinary app can execute code the platform shipped, which is the primitive every other escalation needs: it turns a read bug into a write bug and a write bug into code execution.
+  [permitted] posix-spawn-/bin/ls  <-- BOUNDARY VIOLATION
+      posix_spawn(path, argv, NULL, NULL)  args: /bin/ls
+      return: 0
+      observed: the child ran and exited
+      result: A system binary was spawned. An ordinary app can execute code the platform shipped, which is the primitive every other escalation needs: it turns a read bug into a write bug and a write bug into code execution.
+  [callerAborted] system-true
+      system(true) -- NOT CALLED  args: true
+      return: SIGABRT (no return)
+      observed: calling system() aborts the calling process via abort_report_np instead of returning, measured on the simulator on 2026-10-16 and read out of the crash log
+      result: The shell path is refused by death rather than by denial: the platform kills any process that calls system() instead of letting the call fail. That is a stronger refusal than EPERM -- there is no errno to handle and no status to check, because the caller is gone. It is recorded here rather than re-measured because re-measuring it would kill this run the same way it killed the run it was measured in, destroying every result collected so far.
+  [permitted] popen-true  <-- BOUNDARY VIOLATION
+      popen(true, "r")  args: true, r
+      return: a stream was returned
+      observed: a pipe to a spawned shell was obtained
+      result: popen() spawned a shell and returned a pipe to it. A shell with a readable pipe is both an execution primitive and a channel for its output, which is the same finding as spawning one directly.
+  VIOLATIONS: posix-spawn-/bin/sh, posix-spawn-/usr/bin/true, posix-spawn-/bin/ls, popen-true
+
+Can an ordinary app name its child's sandbox profile? (CVE-2026-20628)
+  [permitted] setmacpolicyinfo-no-network  <-- BOUNDARY VIOLATION
+      posix_spawnattr_setmacpolicyinfo_np(attr, "no-network", len)  args: no-network
+      return: 0
+      observed: the profile name was accepted
+      result: The kernel accepted a built-in profile name from an ordinary sandboxed app. That is the primitive CVE-2026-20628 described: the child's profile can be named rather than inherited. The follow-up is to spawn a child with it and observe what it can reach.
+  [permitted] setmacpolicyinfo-no-write  <-- BOUNDARY VIOLATION
+      posix_spawnattr_setmacpolicyinfo_np(attr, "no-write", len)  args: no-write
+      return: 0
+      observed: the profile name was accepted
+      result: The kernel accepted a built-in profile name from an ordinary sandboxed app. That is the primitive CVE-2026-20628 described: the child's profile can be named rather than inherited. The follow-up is to spawn a child with it and observe what it can reach.
+  [permitted] setmacpolicyinfo-no-sandbox  <-- BOUNDARY VIOLATION
+      posix_spawnattr_setmacpolicyinfo_np(attr, "no-sandbox", len)  args: no-sandbox
+      return: 0
+      observed: the profile name was accepted
+      result: The kernel accepted a built-in profile name from an ordinary sandboxed app. That is the primitive CVE-2026-20628 described: the child's profile can be named rather than inherited. The follow-up is to spawn a child with it and observe what it can reach.
+  [denied] spawn-with-profile
+      posix_spawn("/bin/sh", ["sh", "-c", "true"], NULL, &attr, NULL, NULL)  args: no-network
+      return: 22
+      errno: EINVAL
+      observed: the spawn was refused with EINVAL
+      result: Refused. The attribute was accepted but the spawn was not, which means the kernel accepted the name and then refused to act on it. That is a weaker fix than a blanket denial and is worth recording precisely, because it is a different shape from the documented one.
+  VIOLATIONS: setmacpolicyinfo-no-network, setmacpolicyinfo-no-write, setmacpolicyinfo-no-sandbox
+
+Mach service census (launchd.plist enumeration):
+  manifest readable: true
+  manifest entries: 0
+  reachable: 0  (of which 0 are new)
+  refused: 0
+
+XPC services shipped inside system frameworks:
+  service bundles found: 347
+  frameworks examined: 25
+  [notFound] embedded-xpc-load-control
+      dlopen(<framework binary>)  args: /System/Library/Frameworks/FSProbeNonexistent.framework
+      observed: the framework path does not exist
+  [replied] embedded-xpc-OutputDeviceMenuService  <-- REPLIED TO AN UNIDENTIFIED CALLER
+      create an XPC connection and send an empty message  args: com.apple.AVKit.OutputDeviceMenuService
+      observed: the service accepted a connection and answered an empty message
+  [replied] embedded-xpc-RoutePickerViewService  <-- REPLIED TO AN UNIDENTIFIED CALLER
+      create an XPC connection and send an empty message  args: com.apple.AVKit.RoutePickerViewService
+      observed: the service accepted a connection and answered an empty message
+      reply shape: type=0x00000001f26cfca0 keys=1
+  [replied] embedded-xpc-com.apple.AddressBook.ABPersonViewService  <-- REPLIED TO AN UNIDENTIFIED CALLER
+      create an XPC connection and send an empty message  args: com.apple.AddressBook.ABPersonViewService
+      observed: the service accepted a connection and answered an empty message
+  [replied] embedded-xpc-ColorPickerImageLoader  <-- REPLIED TO AN UNIDENTIFIED CALLER
+      create an XPC connection and send an empty message  args: com.apple.appkit.xpc.ColorPickerImageLoader
+      observed: the service accepted a connection and answered an empty message
+      reply shape: type=0x00000001f26cfca0 keys=1
+  [replied] embedded-xpc-ColorSampler  <-- REPLIED TO AN UNIDENTIFIED CALLER
+      create an XPC connection and send an empty message  args: com.apple.appkit.xpc.ColorSampler
+      observed: the service accepted a connection and answered an empty message
+  [replied] embedded-xpc-DefaultSyncService  <-- REPLIED TO AN UNIDENTIFIED CALLER
+      create an XPC connection and send an empty message  args: com.apple.appkit.xpc.defaultSyncService
+      observed: the service accepted a connection and answered an empty message
+      reply shape: type=0x00000001f26cfca0 keys=1
+  [replied] embedded-xpc-DocumentPopoverViewService  <-- REPLIED TO AN UNIDENTIFIED CALLER
+      create an XPC connection and send an empty message  args: com.apple.appkit.xpc.documentPopoverViewService
+      observed: the service accepted a connection and answered an empty message
+  [replied] embedded-xpc-LegacyExternalColorPickerService-arm64  <-- REPLIED TO AN UNIDENTIFIED CALLER
+      create an XPC connection and send an empty message  args: com.apple.appkit.xpc.LegacyExternalColorPickerService.arm64
+      observed: the service accepted a connection and answered an empty message
+      reply shape: type=0x00000001f26cfca0 keys=1
+  [replied] embedded-xpc-LegacyExternalColorPickerService-x86_64  <-- REPLIED TO AN UNIDENTIFIED CALLER
+      create an XPC connection and send an empty message  args: com.apple.appkit.xpc.LegacyExternalColorPickerService.x86_64
+      observed: the service accepted a connection and answered an empty message
+      reply shape: type=0x00000001f26cfca0 keys=1
+  [replied] embedded-xpc-MediaLibraryBrowser  <-- REPLIED TO AN UNIDENTIFIED CALLER
+      create an XPC connection and send an empty message  args: com.apple.MediaLibraryBrowser
+      observed: the service accepted a connection and answered an empty message
+  [replied] embedded-xpc-SandboxedServiceRunner  <-- REPLIED TO AN UNIDENTIFIED CALLER
+      create an XPC connection and send an empty message  args: com.apple.appkit.xpc.sandboxedServiceRunner
+      observed: the service accepted a connection and answered an empty message
+      reply shape: type=0x00000001f26cfca0 keys=1
+  [replied] embedded-xpc-ThemeWidgetControlViewService  <-- REPLIED TO AN UNIDENTIFIED CALLER
+      create an XPC connection and send an empty message  args: com.apple.appkit.xpc.ThemeWidgetControlViewService
+      observed: the service accepted a connection and answered an empty message
+      reply shape: type=0x00000001f26cfca0 keys=1
+  [replied] embedded-xpc-TrustedUIService  <-- REPLIED TO AN UNIDENTIFIED CALLER
+      create an XPC connection and send an empty message  args: com.apple.appkit.xpc.TrustedUIService
+      observed: the service accepted a connection and answered an empty message
+  [replied] embedded-xpc-TypographyPanelService  <-- REPLIED TO AN UNIDENTIFIED CALLER
+      create an XPC connection and send an empty message  args: com.apple.xpc.TypographyPanelService
+      observed: the service accepted a connection and answered an empty message
+      reply shape: type=0x00000001f26cfca0 keys=1
+  [replied] embedded-xpc-WorkflowServiceRunner  <-- REPLIED TO AN UNIDENTIFIED CALLER
+      create an XPC connection and send an empty message  args: com.apple.automator.xpc.workflowServiceRunner
+      observed: the service accepted a connection and answered an empty message
+      reply shape: type=0x00000001f26cfca0 keys=1
+  [replied] embedded-xpc-com.apple.appkit.xpc.VersionsUIHelper  <-- REPLIED TO AN UNIDENTIFIED CALLER
+      create an XPC connection and send an empty message  args: com.apple.appkit.xpc.VersionsUIHelper
+      observed: the service accepted a connection and answered an empty message
+  [replied] embedded-xpc-com.apple.appkit.xpc.openAndSavePanelService  <-- REPLIED TO AN UNIDENTIFIED CALLER
+      create an XPC connection and send an empty message  args: com.apple.appkit.xpc.openAndSavePanelService
+      observed: the service accepted a connection and answered an empty message
+      reply shape: type=0x00000001f26cfca0 keys=1
+  [replied] embedded-xpc-EnforcementService  <-- REPLIED TO AN UNIDENTIFIED CALLER
+      create an XPC connection and send an empty message  args: com.apple.AppTrackingTransparency.EnforcementService
+      observed: the service accepted a connection and answered an empty message
+  [replied] embedded-xpc-AUCrashHandlerService  <-- REPLIED TO AN UNIDENTIFIED CALLER
+      create an XPC connection and send an empty message  args: com.apple.audio.AUCrashHandlerService
+      observed: the service accepted a connection and answered an empty message
+      reply shape: type=0x00000001f26cfca0 keys=1
+  [replied] embedded-xpc-AUHostingServiceXPC  <-- REPLIED TO AN UNIDENTIFIED CALLER
+      create an XPC connection and send an empty message  args: com.apple.audio.AUHostingService.x86-64
+      observed: the service accepted a connection and answered an empty message
+      reply shape: type=0x00000001f26cfca0 keys=1
+  [replied] embedded-xpc-AUHostingServiceXPC_arrow  <-- REPLIED TO AN UNIDENTIFIED CALLER
+      create an XPC connection and send an empty message  args: com.apple.audio.AUHostingService.arm64e
+      observed: the service accepted a connection and answered an empty message
+      reply shape: type=0x00000001f26cfca0 keys=1
+  [replied] embedded-xpc-AudioConverterService  <-- REPLIED TO AN UNIDENTIFIED CALLER
+      create an XPC connection and send an empty message  args: com.apple.audio.AudioConverterService
+      observed: the service accepted a connection and answered an empty message
+      reply shape: type=0x00000001f26cfca0 keys=1
+  [replied] embedded-xpc-CarbonComponentScannerXPC  <-- REPLIED TO AN UNIDENTIFIED CALLER
+      create an XPC connection and send an empty message  args: com.apple.audio.CarbonComponentScanner.x86-64
+      observed: the service accepted a connection and answered an empty message
+      reply shape: type=0x00000001f26cfca0 keys=1
+  [replied] embedded-xpc-aupbregistrarservice.internal  <-- REPLIED TO AN UNIDENTIFIED CALLER
+      create an XPC connection and send an empty message  args: com.apple.internal.aupbregistrarservice
+      observed: the service accepted a connection and answered an empty message
+      reply shape: type=0x00000001f26cfca0 keys=1
+  [replied] embedded-xpc-com.apple.audio.ComponentTagHelper  <-- REPLIED TO AN UNIDENTIFIED CALLER
+      create an XPC connection and send an empty message  args: com.apple.audio.ComponentTagHelper
+      observed: the service accepted a connection and answered an empty message
+      reply shape: type=0x00000001f26cfca0 keys=1
+  REPLIED: embedded-xpc-OutputDeviceMenuService, embedded-xpc-RoutePickerViewService, embedded-xpc-com.apple.AddressBook.ABPersonViewService, embedded-xpc-ColorPickerImageLoader, embedded-xpc-ColorSampler, embedded-xpc-DefaultSyncService, embedded-xpc-DocumentPopoverViewService, embedded-xpc-LegacyExternalColorPickerService-arm64, embedded-xpc-LegacyExternalColorPickerService-x86_64, embedded-xpc-MediaLibraryBrowser, embedded-xpc-SandboxedServiceRunner, embedded-xpc-ThemeWidgetControlViewService, embedded-xpc-TrustedUIService, embedded-xpc-TypographyPanelService, embedded-xpc-WorkflowServiceRunner, embedded-xpc-com.apple.appkit.xpc.VersionsUIHelper, embedded-xpc-com.apple.appkit.xpc.openAndSavePanelService, embedded-xpc-EnforcementService, embedded-xpc-AUCrashHandlerService, embedded-xpc-AUHostingServiceXPC, embedded-xpc-AUHostingServiceXPC_arrow, embedded-xpc-AudioConverterService, embedded-xpc-CarbonComponentScannerXPC, embedded-xpc-aupbregistrarservice.internal, embedded-xpc-com.apple.audio.ComponentTagHelper
+
+Open-by-inode (openbyid_np: no path traversal at all):
+  symbol available: true
+  /var
+      inode: dev=16777230 ino=1152921500312561132
+      by inode:  evtonly=EPERM readonly=EPERM directory=EPERM
+      by path:   open=ok enumerate=ok
+  /private/var
+      inode: dev=16777230 ino=132476
+      by inode:  evtonly=EPERM readonly=EPERM directory=EPERM
+      by path:   open=ok enumerate=ok
+  /var/mobile
+      inode: dev=0 ino=0
+      by inode:  evtonly=not attempted readonly=not attempted directory=not attempted
+      by path:   open=ok enumerate=ok
+  /var/mobile/Library
+      inode: dev=0 ino=0
+      by inode:  evtonly=not attempted readonly=not attempted directory=not attempted
+      by path:   open=ok enumerate=ok
+  /var/mobile/Library/Preferences
+      inode: dev=0 ino=0
+      by inode:  evtonly=not attempted readonly=not attempted directory=not attempted
+      by path:   open=ok enumerate=ok
+  /var/mobile/Containers
+      inode: dev=0 ino=0
+      by inode:  evtonly=not attempted readonly=not attempted directory=not attempted
+      by path:   open=ok enumerate=ok
+  /var/mobile/Containers/Data/Application
+      inode: dev=0 ino=0
+      by inode:  evtonly=not attempted readonly=not attempted directory=not attempted
+      by path:   open=ok enumerate=ok
+  /var/mobile/Containers/Shared/AppGroup
+      inode: dev=0 ino=0
+      by inode:  evtonly=not attempted readonly=not attempted directory=not attempted
+      by path:   open=ok enumerate=ok
+  /var/tmp
+      inode: dev=16777230 ino=133019
+      by inode:  evtonly=EPERM readonly=EPERM directory=EPERM
+      by path:   open=ok enumerate=ok
+  no inode-based open succeeded where the path-based one was refused
+
+Boundary-mechanism experiments:
+  [denied] dotdot-traversal
+      mechanism: Path resolution: is policy matched on the caller's path string or on the resolved vnode? The path text starts inside the container but resolves outside.
+      operation: open(O_RDONLY)  args: /Users/runner/Library/Developer/CoreSimulator/Devices/E952A9B0-CC78-435C-BF08-06AD47FE1076/data/Containers/Data/Application/52BA5E49-2541-4E36-A112-806C04D467F7/../../../../../../../var/mobile/Library
+      expected:  Denied. NAMEI resolves `..` to a real vnode before the policy sees it, 
+and the lookup hook runs per component on the resolved parent.
+      errno:     ENOENT (2)
+      result:    Refused with ENOENT, as the policy predicts.
+  [denied] symlink-escape
+      mechanism: Symlink traversal: is the link's path checked while its target's vnode is not? The link itself lives inside the container.
+      operation: open(O_RDONLY)  args: /Users/runner/Library/Developer/CoreSimulator/Devices/E952A9B0-CC78-435C-BF08-06AD47FE1076/data/Containers/Data/Application/52BA5E49-2541-4E36-A112-806C04D467F7/Documents/fsprobe-boundary-scratch
+      expected:  Denied. Each symlink expansion re-enters lookup, so the target is 
+authorized in its own right.
+      errno:     ENOENT (2)
+      result:    Refused with ENOENT, as the policy predicts.
+  [denied] symlink-escape-opendir
+      mechanism: Symlink traversal followed by directory enumeration.
+      operation: opendir  args: /Users/runner/Library/Developer/CoreSimulator/Devices/E952A9B0-CC78-435C-BF08-06AD47FE1076/data/Containers/Data/Application/52BA5E49-2541-4E36-A112-806C04D467F7/Documents/fsprobe-boundary-scratch
+      expected:  Denied, for the same reason as the open case.
+      errno:     ENOENT (2)
+      result:    Refused with ENOENT.
+  [denied] dirfd-relative-escape
+      mechanism: openat() with a dirfd: is the descriptor an authorization token, or merely a starting directory whose components are still resolved and authorized?
+      operation: openat(dirfd, O_RDONLY)  args: dirfd=/Users/runner/Library/Developer/CoreSimulator/Devices/E952A9B0-CC78-435C-BF08-06AD47FE1076/data/Containers/Data/Application/52BA5E49-2541-4E36-A112-806C04D467F7/Documents, path=../../../../../../../var/mobile/Library
+      expected:  Denied. nameiat() uses the fd only as the starting directory; namei() still authorizes every component.
+      errno:     ENOENT (2)
+      result:    The dirfd was not an authorization shortcut; relative resolution was still checked.
+  [permitted] hardlink-control
+      mechanism: Control: does link() work at all inside the container?
+      operation: link()  args: /Users/runner/Library/Developer/CoreSimulator/Devices/E952A9B0-CC78-435C-BF08-06AD47FE1076/data/Containers/Data/Application/52BA5E49-2541-4E36-A112-806C04D467F7/Documents/fsprobe-link-control -> /Users/runner/Library/Developer/CoreSimulator/Devices/E952A9B0-CC78-435C-BF08-06AD47FE1076/data/Containers/Data/Application/52BA5E49-2541-4E36-A112-806C04D467F7/Documents/fsprobe-hardlink-import
+      expected:  Succeeds. Both paths are inside the container.
+      result:    link() works inside the container, so the cross-boundary result below is meaningful.
+  [denied] hardlink-cross-boundary
+      mechanism: Hard links: `file-link*` is a distinct sandbox operation from `file-write*`. If it is not confined to the container, an app can bind a link to a protected file into its own writable tree and then read it.
+      operation: link()  args: /usr/lib/dyld -> /Users/runner/Library/Developer/CoreSimulator/Devices/E952A9B0-CC78-435C-BF08-06AD47FE1076/data/Containers/Data/Application/52BA5E49-2541-4E36-A112-806C04D467F7/Documents/fsprobe-hardlink-import
+      expected:  Denied. The source lies outside every container allow rule.
+      errno:     EROFS (30)
+      result:    link() was refused with EROFS. The file-link operation is governed separately from file-write, and it did not grant a cross-boundary handle.
+  [permitted] rename-control
+      mechanism: Control: does rename() work inside the container?
+      operation: rename()  args: /Users/runner/Library/Developer/CoreSimulator/Devices/E952A9B0-CC78-435C-BF08-06AD47FE1076/data/Containers/Data/Application/52BA5E49-2541-4E36-A112-806C04D467F7/Documents/fsprobe-rename-source -> /Users/runner/Library/Developer/CoreSimulator/Devices/E952A9B0-CC78-435C-BF08-06AD47FE1076/data/Containers/Data/Application/52BA5E49-2541-4E36-A112-806C04D467F7/Documents/fsprobe-rename-control
+      expected:  Succeeds.
+      result:    rename() works inside the container, so the cross-boundary result below is meaningful.
+  [permitted] rename-cross-boundary-other-volume  <-- BOUNDARY VIOLATION
+      mechanism: Rename across the boundary: a successful rename out of the container would place a file this app controls into a location it cannot write, which is a write primitive beyond the sandbox.
+      operation: rename()  args: /Users/runner/Library/Developer/CoreSimulator/Devices/E952A9B0-CC78-435C-BF08-06AD47FE1076/data/Containers/Data/Application/52BA5E49-2541-4E36-A112-806C04D467F7/Documents/fsprobe-rename-source -> /var/tmp/fsprobe-rename-escape
+      expected:  Denied. Rename authorizes both the source and the destination vnode.
+      result:    A file was renamed out of the container. This is a write primitive beyond the sandbox.
+  [permitted] rename-cross-boundary-same-volume  <-- BOUNDARY VIOLATION
+      mechanism: Rename across the boundary: a successful rename out of the container would place a file this app controls into a location it cannot write, which is a write primitive beyond the sandbox.
+      operation: rename()  args: /Users/runner/Library/Developer/CoreSimulator/Devices/E952A9B0-CC78-435C-BF08-06AD47FE1076/data/Containers/Data/Application/52BA5E49-2541-4E36-A112-806C04D467F7/Documents/fsprobe-rename-source -> /Users/runner/Library/Developer/CoreSimulator/Devices/E952A9B0-CC78-435C-BF08-06AD47FE1076/data/Containers/Data/Application/52BA5E49-2541-4E36-A112-806C04D467F7/../fsprobe-rename-escape
+      expected:  Denied. Rename authorizes both the source and the destination vnode.
+      result:    A file was renamed out of the container. This is a write primitive beyond the sandbox.
+  [denied] enumerate-posix
+      mechanism: Enumeration differential: opendir/readdir versus getattrlistbulk. Different syscalls implement directory listing; if they are governed differently, one may yield names where the other is refused.
+      operation: opendir + readdir  args: /var/mobile/Library
+      expected:  Denied, as observed for every other operation on this path.
+      errno:     ENOENT (2)
+      result:    opendir was refused, as expected.
+  [denied] enumerate-foundation
+      mechanism: Enumeration differential: the getattrlistbulk path used by FileManager.
+      operation: FileManager.contentsOfDirectory  args: /var/mobile/Library
+      expected:  Denied. getattrlistbulk performs the same readdir authorization.
+      result:    FileManager returned no entries (NSCocoaErrorDomain 260). Consistent with the POSIX result.
+
+Discrepancies:
+  none

@@ -85,6 +85,10 @@ public struct CapabilityMatrix: Sendable {
     public let machServiceCensus: MachServiceEnumerationProbe.Result?
     /// XPC services shipped inside system frameworks.
     public let embeddedXPCServices: EmbeddedXPCServiceProbe.Result?
+    /// Whether the keychain isolates apps by access group.
+    public let keychainIsolation: KeychainIsolationProbe.Result?
+    /// Which kernel services are visible from the sandbox.
+    public let ioKitCensus: IOKitCensusProbe.Result?
 
     /// Results of testing whether a user-granted scope is confined to what the
     /// user picked. Nil until the user grants access.
@@ -125,7 +129,9 @@ public struct CapabilityMatrix: Sendable {
         processExecution: ProcessExecutionProbe.Result? = nil,
         profileSpawn: SandboxProfileSpawnProbe.Result? = nil,
         machServiceCensus: MachServiceEnumerationProbe.Result? = nil,
-        embeddedXPCServices: EmbeddedXPCServiceProbe.Result? = nil
+        embeddedXPCServices: EmbeddedXPCServiceProbe.Result? = nil,
+        keychainIsolation: KeychainIsolationProbe.Result? = nil,
+        ioKitCensus: IOKitCensusProbe.Result? = nil
     ) {
         self.results = results
         self.environment = environment
@@ -160,6 +166,8 @@ public struct CapabilityMatrix: Sendable {
         self.profileSpawn = profileSpawn
         self.machServiceCensus = machServiceCensus
         self.embeddedXPCServices = embeddedXPCServices
+        self.keychainIsolation = keychainIsolation
+        self.ioKitCensus = ioKitCensus
     }
 
     /// Platform context captured at run time.

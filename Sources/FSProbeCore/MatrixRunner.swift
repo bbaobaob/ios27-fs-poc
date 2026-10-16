@@ -84,6 +84,8 @@ public struct MatrixRunner: Sendable {
         var profileSpawn: SandboxProfileSpawnProbe.Result?
         var machServiceCensus: MachServiceEnumerationProbe.Result?
         var embeddedXPCServices: EmbeddedXPCServiceProbe.Result?
+        var keychainIsolation: KeychainIsolationProbe.Result?
+        var ioKitCensus: IOKitCensusProbe.Result?
 
         /// The matrix as it stands right now.
         ///
@@ -124,7 +126,9 @@ public struct MatrixRunner: Sendable {
                 processExecution: processExecution,
                 profileSpawn: profileSpawn,
                 machServiceCensus: machServiceCensus,
-                embeddedXPCServices: embeddedXPCServices
+                embeddedXPCServices: embeddedXPCServices,
+                keychainIsolation: keychainIsolation,
+                ioKitCensus: ioKitCensus
             )
         }
 
@@ -275,6 +279,20 @@ public struct MatrixRunner: Sendable {
             // sandbox profile never names them.
             embeddedXPCServices = EmbeddedXPCServiceProbe.probe()
             reportProgress("embedded-xpc-services")
+
+            // A different data boundary with the same shape as the container:
+            // the keychain isolates apps by access group. A broad query that
+            // names no group must return only the caller's own items.
+            keychainIsolation = KeychainIsolationProbe.probe()
+            reportProgress("keychain-isolation")
+
+            // The census half of the kernel surface: which IORegistry entries
+            // are enumerable from the sandbox. No user client is opened and no
+            // external method is called -- visibility is reconnaissance, and a
+            // later experiment aimed by this list would test what any of them
+            // will do for an unidentified caller.
+            ioKitCensus = IOKitCensusProbe.probe()
+            reportProgress("iokit-census")
         }
 
         return CapabilityMatrix(
@@ -308,7 +326,9 @@ public struct MatrixRunner: Sendable {
             processExecution: processExecution,
             profileSpawn: profileSpawn,
             machServiceCensus: machServiceCensus,
-            embeddedXPCServices: embeddedXPCServices
+            embeddedXPCServices: embeddedXPCServices,
+            keychainIsolation: keychainIsolation,
+            ioKitCensus: ioKitCensus
         )
     }
 }

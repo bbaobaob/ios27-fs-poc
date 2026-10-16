@@ -693,6 +693,50 @@ public enum ReportExporter {
             }
         }
 
+        if let keychain = matrix.keychainIsolation {
+            lines.append("")
+            lines.append("Does the keychain isolate apps by access group?")
+            for item in keychain.queries {
+                let flag = item.isBoundaryViolation ? "  <-- FOREIGN ITEMS RETURNED" : ""
+                lines.append("  [\(item.outcome.rawValue)] \(item.id)\(flag)")
+                lines.append("      \(item.operation)  args: \(item.arguments)")
+                if let st = item.statusName { lines.append("      status: \(st)") }
+                if let n = item.matchCount { lines.append("      matches: \(n)") }
+                if let f = item.foreignMatchCount, f > 0 {
+                    lines.append("      foreign: \(f)")
+                }
+                lines.append("      observed: \(item.observed ?? "no answer")")
+                lines.append("      result: \(item.interpretation)")
+            }
+            if !keychain.violations.isEmpty {
+                let names = keychain.violations.map { $0.id }
+                lines.append("  VIOLATIONS: " + names.joined(separator: ", "))
+            } else if keychain.queries.isEmpty {
+                lines.append("  NOT_ATTEMPTED: no keychain query ran.")
+            } else {
+                lines.append("  no items outside the caller's access group were returned")
+            }
+        }
+
+        if let census = matrix.ioKitCensus {
+            lines.append("")
+            lines.append("IORegistry census (kernel services visible from the sandbox):")
+            for entry in census.entries {
+                lines.append("  [\(entry.outcome.rawValue)] \(entry.id)")
+                lines.append("      \(entry.operation)  class: \(entry.serviceClass)")
+                if let n = entry.matchCount {
+                    lines.append("      matches: \(n)"
+                        + (entry.exhausted == false ? " (walk truncated)" : ""))
+                }
+                if !entry.sampleNames.isEmpty {
+                    lines.append("      sample: " + entry.sampleNames.prefix(8).joined(separator: ", "))
+                }
+                if let err = entry.errorName { lines.append("      error: \(err)") }
+                if let obs = entry.observed { lines.append("      observed: \(obs)") }
+            }
+            lines.append("  visibility is reconnaissance: no entry here is a finding")
+        }
+
         if let io = matrix.inodeOpen {
             lines.append("")
             lines.append("Open-by-inode (openbyid_np: no path traversal at all):")
@@ -826,6 +870,8 @@ public enum ReportExporter {
         let profileSpawn: SandboxProfileSpawnProbe.Result?
         let machServiceCensus: MachServiceEnumerationProbe.Result?
         let embeddedXPCServices: EmbeddedXPCServiceProbe.Result?
+        let keychainIsolation: KeychainIsolationProbe.Result?
+        let ioKitCensus: IOKitCensusProbe.Result?
 
         init(matrix: CapabilityMatrix) {
             self.schema = "fsprobe.capability-matrix.v9"
@@ -862,6 +908,8 @@ public enum ReportExporter {
             self.profileSpawn = matrix.profileSpawn
             self.machServiceCensus = matrix.machServiceCensus
             self.embeddedXPCServices = matrix.embeddedXPCServices
+            self.keychainIsolation = matrix.keychainIsolation
+            self.ioKitCensus = matrix.ioKitCensus
         }
     }
 }
