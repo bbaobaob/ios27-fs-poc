@@ -362,17 +362,28 @@ public enum KeychainIsolationProbe {
     /// in which case every attributed group is treated as foreign and said so.
     private static func applicationIdentifier() -> String? {
         #if canImport(Darwin)
-        // Takes the allocator as its one argument; nil is the default.
-        guard let task = SecTaskCreateFromSelf(nil) else { return nil }
-        // The entitlement key is a plain string; no framework constant names
-        // it, so it is spelled out rather than imported.
-        // Takes task, entitlement key, and an error-out pointer; nil for
-        // the last means errors surface as a nil return, which is all this
-        // caller needs.
-        guard let value = SecTaskCopyValueForEntitlement(
-            task, "application-identifier" as CFString, nil
-        ) else { return nil }
-        return value as? String
+        // Bound at runtime rather than imported: one SDK in this project's
+        // build matrix declares these symbols and another does not, and the
+        // import is what the SDK permits while the runtime is what the kernel
+        // answers. dlsym resolves what is really there; absence reads as an
+        // unreadable group rather than a compile failure.
+        typealias CreateTaskFn = @convention(c) (UnsafeRawPointer?) -> OpaquePointer?
+        typealias CopyEntitlementFn = @convention(c) (
+            OpaquePointer?, UnsafePointer<CChar>, UnsafeMutableRawPointer?
+        ) -> Unmanaged<CFString>?
+        guard let createPtr = POSIXShim.lookupSymbol("SecTaskCreateFromSelf"),
+              let copyPtr = POSIXShim.lookupSymbol("SecTaskCopyValueForEntitlement")
+        else { return nil }
+        let createTask = unsafeBitCast(createPtr, to: CreateTaskFn.self)
+        let copyEntitlement = unsafeBitCast(copyPtr, to: CopyEntitlementFn.self)
+        // The allocator is nil (the default); the error-out pointer is nil
+        // (errors surface as a nil return, which is all this caller needs).
+        guard let task = createTask(nil) else { return nil }
+        guard let value = "application-identifier".withCString({
+            copyEntitlement(task, $0, nil)
+        }) else { return nil }
+        // Retained by the call; taken into ARC once, which owns it after.
+        return value.takeRetainedValue() as String
         #else
         return nil
         #endif
