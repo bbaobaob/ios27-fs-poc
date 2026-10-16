@@ -222,13 +222,18 @@ public enum IOKitCensusProbe {
         // Every object the iterator hands out is released on every path,
         // including the drain: an unreleased service object holds a kernel
         // reference, and a census that leaks hundreds of them is not
-        // read-only in any honest sense.
-        defer { kit.releaseObject(iterator) }
-
+        // read-only in any honest sense. A null iterator (the matched-nothing
+        // shape) walks nowhere and releases nothing -- there is no object to
+        // release, and calling into the kernel with a null iterator to find
+        // that out would be the wrong way to learn it.
         var names: [String] = []
         var count = 0
         var exhausted = true
-        while let service = kit.nextService(iterator) {
+        if iterator == 0 {
+            exhausted = true
+        } else {
+            defer { kit.releaseObject(iterator) }
+            while let service = kit.nextService(iterator) {
             defer { kit.releaseObject(service) }
             if count < maxNames {
                 if names.count < maxSamples {
@@ -249,6 +254,7 @@ public enum IOKitCensusProbe {
                     kit.releaseObject(rest)
                 }
                 break
+            }
             }
         }
 
@@ -400,12 +406,11 @@ final class IOKitShim: Sendable {
             dict.release()
             return .refused("kern_return_t \(kr)")
         }
-        // Success: consumed by the call. A null iterator with kr == 0 should
-        // not happen; treating it as a refusal without releasing, because the
-        // dictionary is already the kernel's.
-        guard iterator != 0 else {
-            return .refused("null iterator with kern_return_t 0")
-        }
+        // Success: consumed by the call. A null iterator with kr == 0 is the
+        // "matched nothing" shape -- success with nowhere to walk -- and it is
+        // exactly the control's expected answer, so it is an (empty) iterator
+        // rather than a refusal. Collapsing it into refusal would destroy the
+        // distinction the control exists to draw.
         return .iterator(iterator)
     }
 
