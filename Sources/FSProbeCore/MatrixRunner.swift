@@ -86,6 +86,7 @@ public struct MatrixRunner: Sendable {
         var embeddedXPCServices: EmbeddedXPCServiceProbe.Result?
         var keychainIsolation: KeychainIsolationProbe.Result?
         var ioKitCensus: IOKitCensusProbe.Result?
+        var spotlightEnumeration: SpotlightEnumerationProbe.Result?
 
         /// The matrix as it stands right now.
         ///
@@ -128,7 +129,8 @@ public struct MatrixRunner: Sendable {
                 machServiceCensus: machServiceCensus,
                 embeddedXPCServices: embeddedXPCServices,
                 keychainIsolation: keychainIsolation,
-                ioKitCensus: ioKitCensus
+                ioKitCensus: ioKitCensus,
+                spotlightEnumeration: spotlightEnumeration
             )
         }
 
@@ -293,6 +295,13 @@ public struct MatrixRunner: Sendable {
             // will do for an unidentified caller.
             ioKitCensus = IOKitCensusProbe.probe()
             reportProgress("iokit-census")
+
+            // A third party that already walked the whole volume: the metadata
+            // index. If it answers names outside the container, it tells what
+            // the sandbox refuses to tell. The sentinel control proves the
+            // mechanism works before the broad query is read.
+            spotlightEnumeration = SpotlightEnumerationProbe.probe(containerPath: container)
+            reportProgress("spotlight-enumeration")
         }
 
         return CapabilityMatrix(
@@ -328,7 +337,8 @@ public struct MatrixRunner: Sendable {
             machServiceCensus: machServiceCensus,
             embeddedXPCServices: embeddedXPCServices,
             keychainIsolation: keychainIsolation,
-            ioKitCensus: ioKitCensus
+            ioKitCensus: ioKitCensus,
+            spotlightEnumeration: spotlightEnumeration
         )
     }
 }

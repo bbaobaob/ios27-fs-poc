@@ -737,6 +737,33 @@ public enum ReportExporter {
             lines.append("  visibility is reconnaissance: no entry here is a finding")
         }
 
+        if let spotlight = matrix.spotlightEnumeration {
+            lines.append("")
+            lines.append("Does the metadata index leak names outside the container?")
+            for item in spotlight.queries {
+                let flag = item.isBoundaryViolation ? "  <-- OUTSIDE ITEMS RETURNED" : ""
+                lines.append("  [\(item.outcome.rawValue)] \(item.id)\(flag)")
+                lines.append("      \(item.operation)  args: \(item.arguments)")
+                if let n = item.matchCount { lines.append("      matches: \(n)") }
+                if let o = item.outsideCount, o > 0 {
+                    lines.append("      outside: \(o)")
+                    for path in item.outsidePaths.prefix(6) {
+                        lines.append("        \(path)")
+                    }
+                }
+                lines.append("      observed: \(item.observed ?? "no answer")")
+                lines.append("      result: \(item.interpretation)")
+            }
+            if !spotlight.violations.isEmpty {
+                let names = spotlight.violations.map { $0.id }
+                lines.append("  VIOLATIONS: " + names.joined(separator: ", "))
+            } else if spotlight.queries.isEmpty {
+                lines.append("  NOT_ATTEMPTED: no metadata query ran.")
+            } else {
+                lines.append("  no indexed names outside the container were returned")
+            }
+        }
+
         if let io = matrix.inodeOpen {
             lines.append("")
             lines.append("Open-by-inode (openbyid_np: no path traversal at all):")
@@ -872,6 +899,7 @@ public enum ReportExporter {
         let embeddedXPCServices: EmbeddedXPCServiceProbe.Result?
         let keychainIsolation: KeychainIsolationProbe.Result?
         let ioKitCensus: IOKitCensusProbe.Result?
+        let spotlightEnumeration: SpotlightEnumerationProbe.Result?
 
         init(matrix: CapabilityMatrix) {
             self.schema = "fsprobe.capability-matrix.v9"
@@ -910,6 +938,7 @@ public enum ReportExporter {
             self.embeddedXPCServices = matrix.embeddedXPCServices
             self.keychainIsolation = matrix.keychainIsolation
             self.ioKitCensus = matrix.ioKitCensus
+            self.spotlightEnumeration = matrix.spotlightEnumeration
         }
     }
 }

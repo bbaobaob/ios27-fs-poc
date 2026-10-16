@@ -84,6 +84,39 @@ final class DataBoundaryProbeTests: XCTestCase {
         XCTAssertTrue(result.violationsAlwaysEmpty)
     }
 
+    func testOnlyOutsideItemsAreViolations() {
+        // The metadata index either keeps names inside the container or it
+        // does not. Anything else -- including a control that could not run
+        // -- is never a violation, because a violation here claims a leak.
+        let cases: [(SpotlightEnumerationProbe.Outcome, Bool)] = [
+            (.outsideItems, true), (.isolated, false), (.notAttempted, false)
+        ]
+        for (outcome, shouldFlag) in cases {
+            let item = SpotlightEnumerationProbe.Query(
+                id: "case", operation: "o", arguments: "a", expected: "e",
+                expectedDenied: true, outcome: outcome,
+                matchCount: nil, outsideCount: nil, outsidePaths: [],
+                observed: "obs", interpretation: "interp"
+            )
+            XCTAssertEqual(item.isBoundaryViolation, shouldFlag,
+                           "\(outcome) must \(shouldFlag ? "" : "not ") be a violation")
+        }
+    }
+
+    func testSpotlightControlLeadsAndViolationListMatches() {
+        // Tmp as the container: the sentinel round-trips through the real
+        // mechanism wherever Spotlight exists, and reports unattempted where
+        // it does not. Either way the control is first and the violation
+        // list matches the flags.
+        let dir = NSTemporaryDirectory()
+        let result = SpotlightEnumerationProbe.probe(containerPath: dir)
+        XCTAssertFalse(result.queries.isEmpty)
+        XCTAssertEqual(result.queries.first?.id, "spotlight-control")
+        let flagged = Set(result.queries.filter { $0.isBoundaryViolation }.map { $0.id })
+        let listed = Set(result.violations.map { $0.id })
+        XCTAssertEqual(flagged, listed, "the violation list must match the flags")
+    }
+
     func testReportRendersBothSections() {
         let matrix = CapabilityMatrix(
             results: [],
@@ -98,5 +131,17 @@ final class DataBoundaryProbeTests: XCTestCase {
                       "the report must render the keychain section")
         XCTAssertTrue(text.contains("IORegistry census"),
                       "the report must render the IOKit section")
+        let matrix2 = CapabilityMatrix(
+            results: [],
+            environment: CapabilityMatrix.EnvironmentRecord(
+                osVersion: "test", osBuild: "test", deviceModel: "test"
+            ),
+            spotlightEnumeration: SpotlightEnumerationProbe.probe(
+                containerPath: NSTemporaryDirectory()
+            )
+        )
+        let text2 = ReportExporter.text(matrix2, targets: [])
+        XCTAssertTrue(text2.contains("Does the metadata index leak names outside the container?"),
+                      "the report must render the Spotlight section")
     }
 }

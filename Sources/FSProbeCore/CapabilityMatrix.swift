@@ -89,6 +89,8 @@ public struct CapabilityMatrix: Sendable {
     public let keychainIsolation: KeychainIsolationProbe.Result?
     /// Which kernel services are visible from the sandbox.
     public let ioKitCensus: IOKitCensusProbe.Result?
+    /// Whether the metadata index leaks names outside the container.
+    public let spotlightEnumeration: SpotlightEnumerationProbe.Result?
 
     /// Results of testing whether a user-granted scope is confined to what the
     /// user picked. Nil until the user grants access.
@@ -131,7 +133,8 @@ public struct CapabilityMatrix: Sendable {
         machServiceCensus: MachServiceEnumerationProbe.Result? = nil,
         embeddedXPCServices: EmbeddedXPCServiceProbe.Result? = nil,
         keychainIsolation: KeychainIsolationProbe.Result? = nil,
-        ioKitCensus: IOKitCensusProbe.Result? = nil
+        ioKitCensus: IOKitCensusProbe.Result? = nil,
+        spotlightEnumeration: SpotlightEnumerationProbe.Result? = nil
     ) {
         self.results = results
         self.environment = environment
@@ -168,6 +171,7 @@ public struct CapabilityMatrix: Sendable {
         self.embeddedXPCServices = embeddedXPCServices
         self.keychainIsolation = keychainIsolation
         self.ioKitCensus = ioKitCensus
+        self.spotlightEnumeration = spotlightEnumeration
     }
 
     /// Platform context captured at run time.
