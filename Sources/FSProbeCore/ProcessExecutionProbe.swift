@@ -58,6 +58,10 @@ public enum ProcessExecutionProbe {
         case notFound
         /// The call failed for another recorded reason.
         case otherError
+        /// Calling the operation aborts the caller instead of returning, so it
+        /// cannot be measured by calling it. Recorded from a crash log, not
+        /// from a return value.
+        case callerAborted
         /// The symbol is not present on this platform.
         case symbolUnavailable
         /// The experiment was not attempted, with the reason recorded.
@@ -172,8 +176,15 @@ public enum ProcessExecutionProbe {
             ))
         }
 
-        // The libc wrappers, which are separate code paths from posix_spawn.
-        spawns.append(systemCase())
+        // The libc wrappers. system() is deliberately NOT called: on 2026-10-16
+        // the simulator run aborted inside system() itself (SIGABRT via
+        // abort_report_np -- the crash log names system as the aborting frame),
+        // so it is not an operation that returns an answer but a trap that kills
+        // the caller. Calling it again would not measure anything; it would kill
+        // the harness again and destroy every result the run had produced. What
+        // is recorded instead is the trap itself, which is still a measurement:
+        // the platform refuses the shell path by death rather than by denial.
+        spawns.append(systemTrapRecord())
         spawns.append(popenCase())
 
         let violations = spawns.filter { $0.isBoundaryViolation }
@@ -225,35 +236,47 @@ public enum ProcessExecutionProbe {
         )
     }
 
-    private static func systemCase() -> Spawn {
-        let id = "system-true"
-        let operation = "system(\(harmlessCommand))"
-        let mechanism = """
-            The libc `system()` wrapper, which spawns a shell to run a command. A \
-            separate code path from posix_spawn, and never tested.
-            """
-        let arguments = harmlessCommand
+    /// The record of the operation that cannot be run.
+    ///
+    /// system() bound by name resolves and the SDK note says process spawning
+    /// is unavailable on iOS -- but neither fact predicts what the call DOES.
+    /// What it does, measured on the simulator on 2026-10-16 and read out of
+    /// the crash log (abort_report_np called from system, SIGABRT), is kill
+    /// the calling process instead of returning. An operation that aborts its
+    /// caller has no errno, no return value, and no refusal to record -- the
+    /// abort IS the platform's answer, and this record is where it is kept.
+    private static func systemTrapRecord() -> Spawn {
+        systemTrapRecordBody()
+    }
 
-        setErrno(0)
-        let rc = runSystem(harmlessCommand)
-        let err = currentErrno()
-
-        return classify(
-            id: id, mechanism: mechanism, operation: operation,
-            arguments: arguments, rc: rc, err: err,
-            expectedDenied: true,
+    private static func systemTrapRecordBody() -> Spawn {
+        Spawn(
+            id: "system-true",
+            mechanism: """
+                The libc `system()` wrapper, which spawns a shell to run a command. \
+                A separate code path from posix_spawn -- and one that cannot be \
+                exercised, because it does not return.
+                """,
+            operation: "system(\(harmlessCommand)) -- NOT CALLED",
+            arguments: harmlessCommand,
             expected: "Denied with EPERM, or a non-zero status.",
-            permittedMeaning: """
-                system() ran a command through a shell. A shell is a general \
-                execution primitive, so this is the same finding as spawning one \
-                directly.
+            expectedDenied: true,
+            outcome: .callerAborted,
+            errnoName: nil,
+            returnValue: "SIGABRT (no return)",
+            observed: """
+                calling system() aborts the calling process via abort_report_np \
+                instead of returning, measured on the simulator on 2026-10-16 and \
+                read out of the crash log
                 """,
-            deniedMeaning: """
-                Refused. The shell path is denied too.
-                """,
-            notFoundMeaning: """
-                The shell itself was not found, which would be surprising on this \
-                platform and worth recording.
+            interpretation: """
+                The shell path is refused by death rather than by denial: the \
+                platform kills any process that calls system() instead of letting \
+                the call fail. That is a stronger refusal than EPERM -- there is \
+                no errno to handle and no status to check, because the caller is \
+                gone. It is recorded here rather than re-measured because \
+                re-measuring it would kill this run the same way it killed the \
+                run it was measured in, destroying every result collected so far.
                 """
         )
     }
@@ -354,23 +377,11 @@ public enum ProcessExecutionProbe {
         #endif
     }
 
-    // `system` is bound by name for the same reason `popen` is: the SDK marks it
-    // unavailable with the note that process spawning is unavailable on iOS. That
-    // note is evidence about the SDK; the question here is about the kernel, and
-    // only the kernel can answer it.
-    #if canImport(Darwin)
-    @_silgen_name("system")
-    private static func cSystem(_ command: UnsafePointer<CChar>) -> Int32
-    #endif
-
-    private static func runSystem(_ command: String) -> Int {
-        #if canImport(Darwin)
-        return Int(command.withCString { cSystem($0) })
-        #else
-        setErrno(ENOSYS)
-        return -1
-        #endif
-    }
+    // NOTE: there is deliberately no runSystem helper in this file. A `system`
+    // binding existed here and was removed after it killed a simulator run
+    // (SIGABRT via abort_report_np, 2026-10-16). No helper means no call site
+    // can grow back by accident -- re-adding one requires writing the binding
+    // again, which is the review this trap deserves.
 
     // popen and pclose are bound by name rather than called through the import,
     // because the Swift import marks them unavailable with the note "On iOS,

@@ -14,6 +14,7 @@ final class ExecutionProbeTests: XCTestCase {
         let cases: [(ProcessExecutionProbe.Outcome, Bool)] = [
             (.permitted, true), (.denied, false),
             (.notFound, false), (.otherError, false),
+            (.callerAborted, false),
             (.symbolUnavailable, false), (.notAttempted, false)
         ]
         for (outcome, shouldFlag) in cases {
@@ -54,6 +55,21 @@ final class ExecutionProbeTests: XCTestCase {
             }
         }
         XCTAssertTrue(result.violations.allSatisfy { $0.outcome == .permitted })
+    }
+
+    func testSystemIsRecordedAsATrapAndNeverCalled() {
+        // system() aborts its caller (SIGABRT via abort_report_np, measured on
+        // the simulator on 2026-10-16), so the probe must record the trap
+        // without calling it. If this entry ever reads as anything but a
+        // non-violation trap record, the harness is one edit away from killing
+        // itself again.
+        let result = ProcessExecutionProbe.probe()
+        let trap = result.spawns.first { $0.id == "system-true" }
+        XCTAssertNotNil(trap, "the system() trap must always be recorded")
+        XCTAssertEqual(trap?.outcome, .callerAborted)
+        XCTAssertFalse(trap?.isBoundaryViolation ?? true,
+                       "a refusal-by-death is not a violation")
+        XCTAssertFalse(result.violations.contains { $0.id == "system-true" })
     }
 
     func testViolationListMatchesPerSpawnFlags() {
