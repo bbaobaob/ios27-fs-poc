@@ -389,7 +389,10 @@ final class IOKitShim: Sendable {
         var iterator: UInt32 = 0
         let kr = getMatching(port, dict, &iterator)
         if kr != 0 {
-            CFRelease(dict.takeUnretainedValue())
+            // CFRelease is unavailable in Swift (CF objects are automatically
+            // managed), so the +1 from the Create rule is surrendered through
+            // the Unmanaged value itself.
+            dict.release()
             return .refused("kern_return_t \(kr)")
         }
         // Success: consumed by the call. A null iterator with kr == 0 should

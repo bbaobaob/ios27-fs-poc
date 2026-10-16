@@ -362,11 +362,15 @@ public enum KeychainIsolationProbe {
     /// in which case every attributed group is treated as foreign and said so.
     private static func applicationIdentifier() -> String? {
         #if canImport(Darwin)
-        guard let task = SecTaskCreateFromSelf() else { return nil }
+        // Takes the allocator as its one argument; nil is the default.
+        guard let task = SecTaskCreateFromSelf(nil) else { return nil }
         // The entitlement key is a plain string; no framework constant names
         // it, so it is spelled out rather than imported.
+        // Takes task, entitlement key, and an error-out pointer; nil for
+        // the last means errors surface as a nil return, which is all this
+        // caller needs.
         guard let value = SecTaskCopyValueForEntitlement(
-            task, "application-identifier" as CFString
+            task, "application-identifier" as CFString, nil
         ) else { return nil }
         return value as? String
         #else
@@ -389,7 +393,6 @@ public enum KeychainIsolationProbe {
         case errSecAllocate: return "errSecAllocate"
         case errSecNotAvailable: return "errSecNotAvailable"
         case errSecMissingEntitlement: return "errSecMissingEntitlement"
-        case errSecInvalidAccessGroup: return "errSecInvalidAccessGroup"
         default: return "OSStatus(\(status))"
         }
     }
