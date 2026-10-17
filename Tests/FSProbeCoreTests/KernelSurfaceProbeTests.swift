@@ -333,18 +333,34 @@ final class KernelSurfaceProbeTests: XCTestCase {
     }
 
     func testExtensionControlLeads() {
-        // Issuing for the app's own file must produce a token, or every
-        // refusal below is indistinguishable from the machinery not running.
+        // Issuing for the app's own file is the positive control: if it
+        // returns NULL, every refusal below is indistinguishable from the
+        // machinery not running, and the probe is required to SAY so rather
+        // than let the group read as a clean result. On the macOS CI runner
+        // the app carries no sandbox-extension entitlement, so the control
+        // legitimately answers denied -- which is exactly the case this test
+        // pins, because a control that fails and is not labelled as failed is
+        // how an inconclusive group gets read as a negative finding.
         let result = SandboxExtensionProbe.probe()
         XCTAssertFalse(result.entries.isEmpty)
         #if canImport(Darwin)
-        XCTAssertTrue(result.entries.contains { $0.id == "extension-own-issue" },
-                      "the own-file issuance control must be present on Darwin")
-        XCTAssertNotEqual(
-            result.entries.first { $0.id == "extension-own-issue" }?.outcome,
-            .denied,
-            "issuing for the app's own file must not read as a denial"
-        )
+        guard let control = result.entries.first(where: { $0.id == "extension-own-issue" }) else {
+            XCTFail("the own-file issuance control must be present on Darwin")
+            return
+        }
+        XCTAssertNotEqual(control.outcome, .symbolUnavailable,
+                          "the issuance symbol must resolve on Darwin")
+        if control.outcome == .denied {
+            XCTAssertTrue(
+                control.interpretation.contains("CONTROL FAILED"),
+                """
+                a control that produced no token must be labelled as failed, \
+                not silently left to read as a refusal by the boundary
+                """
+            )
+        } else {
+            XCTAssertEqual(control.outcome, .issued)
+        }
         #else
         XCTAssertEqual(Set(result.entries.map { $0.group }).count, 3)
         #endif
