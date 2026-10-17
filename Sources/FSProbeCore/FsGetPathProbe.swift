@@ -189,10 +189,20 @@ public enum FsGetPathProbe {
     #if canImport(Darwin)
 
     // `ssize_t fsgetpath(char *buf, size_t bufsize, uint64_t volume_id,
-    //                   uint64_t object_id)` -- not variadic, not in the Swift
-    // overlay, so it is resolved and called through a fixed pointer.
+    //                   uint64_t object_id)` -- the form this probe was first
+    // written against.
     private typealias FsGetPathFn = @convention(c) (
         UnsafeMutablePointer<CChar>, Int, UInt64, UInt64
+    ) -> Int
+
+    // The other form in the headers: `fsid_t *fsid` rather than a bare
+    // `uint64_t volume_id`. `fsid_t` is two int32s, and the whole reason this
+    // second binding exists is that the first one answered EFAULT for a file
+    // that demonstrably exists -- which is what passing a number into a slot
+    // the callee dereferences as a pointer looks like. Rather than guess
+    // which form a given OS ships, both are tried and both are recorded.
+    private typealias FsGetPathFsidFn = @convention(c) (
+        UnsafeMutablePointer<CChar>, Int, UnsafeMutableRawPointer, UInt64
     ) -> Int
 
     private static func bind<T>(_ name: String) -> T? {
@@ -204,24 +214,113 @@ public enum FsGetPathProbe {
         (NSTemporaryDirectory() as NSString).appendingPathComponent(name)
     }
 
-    /// Call fsgetpath, returning (path, rc, errno).
+    /// The result of one fsgetpath attempt, with the form that produced it.
+    private struct Attempt {
+        let form: String
+        let path: String?
+        let rc: Int
+        let err: Int32
+    }
+
+    /// Try both documented forms of the third argument. A bare
+    /// `uint64_t volume_id` and an `fsid_t *` are not interchangeable, and
+    /// passing one where the other is expected is a dereference of a small
+    /// integer -- an EFAULT rather than a wrong answer, which is why the
+    /// first version of this probe answered EFAULT for a file it had just
+    /// created. Both are attempted and both are reported, so the form that
+    /// works on the host is visible in the result rather than assumed.
     private static func getPath(
-        _ volume: UInt64, _ object: UInt64
-    ) -> (path: String?, rc: Int, err: Int32) {
-        guard let fn: FsGetPathFn = bind("fsgetpath") else {
-            return (nil, -1, Int32(ENOSYS))
+        volume: UInt64, object: UInt64, deviceID: Int32
+    ) -> (Attempt, Attempt) {
+        var bufA = [CChar](repeating: 0, count: 1024)
+        var rcA = -1
+        var errA: Int32 = Int32(ENOSYS)
+        var pathA: String?
+        if let fn: FsGetPathFn = bind("fsgetpath") {
+            setErrno(0)
+            rcA = fn(&bufA, bufA.count, volume, object)
+            errA = currentErrno()
+            if rcA > 0 { pathA = String(cString: bufA) }
         }
-        var buf = [CChar](repeating: 0, count: 1024)
-        setErrno(0)
-        let rc = fn(&buf, buf.count, volume, object)
-        let err = currentErrno()
-        let path = rc > 0 ? String(cString: buf) : nil
-        return (path, rc, err)
+        let a = Attempt(form: "uint64_t volume_id", path: pathA, rc: rcA, err: errA)
+
+        var bufB = [CChar](repeating: 0, count: 1024)
+        var rcB = -1
+        var errB: Int32 = Int32(ENOSYS)
+        var pathB: String?
+        if let fn: FsGetPathFsidFn = bind("fsgetpath") {
+            // fsid_t is two int32s. The first is the device id on Darwin, and
+            // the second is zero for a single-volume answer.
+            var fsid = [Int32(deviceID), Int32(0)]
+            setErrno(0)
+            rcB = fsid.withUnsafeMutableBufferPointer { fsidPtr in
+                fn(&bufB, bufB.count, fsidPtr.baseAddress!, object)
+            }
+            errB = currentErrno()
+            if rcB > 0 { pathB = String(cString: bufB) }
+        }
+        let b = Attempt(form: "fsid_t *", path: pathB, rc: rcB, err: errB)
+        return (a, b)
     }
 
     private static func classify(_ rc: Int, _ err: Int32) -> Outcome {
         rc > 0 ? .answered : (err == Int32(EPERM) ? .denied
             : (err == Int32(ENOENT) ? .notFound : .otherError))
+    }
+
+    /// Render one attempt for an `observed` line.
+    private static func describe(_ a: Attempt) -> String {
+        if let p = a.path { return "\(a.form): \"\(p)\"" }
+        return "\(a.form): rc \(a.rc), errno \(ErrorClassifier.errnoName(a.err))"
+    }
+
+    /// The interpretation for a pair of attempts. A path from either form is
+    /// the answer; EFAULT from both means the call is malformed and the row is
+    /// inconclusive rather than negative.
+    private static func interpret(
+        _ a: Attempt, _ b: Attempt, target: String
+    ) -> String {
+        let anyPath = a.path ?? b.path
+        if let p = anyPath {
+            let via = a.path != nil ? a.form : b.form
+            return """
+                A path was obtained for \(target) via the \(via) form. No path \
+                was supplied, so there was nothing for the sandbox's path hook \
+                to check -- the object was addressed as a pair of numbers. \
+                Recorded with isBoundaryViolation false because the answer came \
+                from a simulator or CI host, a macOS process under a different \
+                sandbox; only a stock iOS 27.0 device makes it a finding. What \
+                it would mean if real is specific: the app learned the name of \
+                an object it was never given a path to.
+                """
+        }
+        if a.err == Int32(EFAULT) && b.err == Int32(EFAULT) {
+            return """
+                Both forms answered EFAULT, which is not an authorization \
+                answer: it says the callee rejected an address. The \
+                own-object control above is the row that decides whether that \
+                is a malformed call or the boundary holding, and this row is \
+                inconclusive beside it.
+                """
+        }
+        if a.err == Int32(EPERM) || b.err == Int32(EPERM) {
+            return """
+                EPERM from at least one form: the sandbox gates the by-number \
+                lookup exactly as it gates the by-name one. The app cannot \
+                learn a path it was refused, which is the correct answer.
+                """
+        }
+        if a.err == Int32(ENOENT) || b.err == Int32(ENOENT) {
+            return """
+                ENOENT: there is no such object. That is an answer about the \
+                object, not about the boundary, and it is the expected shape \
+                for ids the app invented.
+                """
+        }
+        return """
+            Neither form produced a path or a refusal this probe can name. \
+            Recorded as it stands rather than attributed to either cause.
+            """
     }
 
     // MARK: - Group 1: the app's own object
@@ -291,18 +390,18 @@ public enum FsGetPathProbe {
         let volume = UInt64(bitPattern: Int64(st.deviceID))
         let object = st.inode
 
-        let (path, rc, err) = getPath(volume, object)
+        let (a, b) = getPath(volume: volume, object: object, deviceID: st.deviceID)
+        let anyAnswered = a.path != nil || b.path != nil
         return [Entry(
             id: "fsgetpath-control-own-object",
             group: groupOwn,
-            operation: "fsgetpath(buf, 1024, volume=\(volume), object=\(object))",
+            operation: "fsgetpath(buf, 1024, volume/object from stat of ownFile)",
             target: own,
-            outcome: classify(rc, err),
-            errnoName: rc > 0 ? nil : ErrorClassifier.errnoName(err),
-            returnedValue: rc > 0 ? "path (\(rc) bytes)" : "\(rc)",
-            observed: path.map { "fsgetpath returned \"\($0)\"" }
-                ?? "fsgetpath returned \(rc), errno=\(ErrorClassifier.errnoName(err))",
-            interpretation: path == own
+            outcome: anyAnswered ? .answered : classify(a.rc, a.err),
+            errnoName: anyAnswered ? nil : ErrorClassifier.errnoName(a.err),
+            returnedValue: anyAnswered ? "path" : "\(a.rc)",
+            observed: "\(describe(a)); \(describe(b))",
+            interpretation: a.path == own || b.path == own
                 ? """
                     CONTROL: the path came back byte-identical to the path the \
                     app created, obtained by addressing the object as a pair of \
@@ -310,19 +409,29 @@ public enum FsGetPathProbe {
                     in the next group a statement about the boundary rather \
                     than about fsgetpath being unavailable.
                     """
-                : path != nil
+                : anyAnswered
                     ? """
                     CONTROL PARTIAL: fsgetpath answered, but with a different \
-                    path than the one created (\(path ?? "nil")). That is worth \
-                    understanding before the foreign rows are read -- it may \
-                    mean the app is not on the volume it thinks it is.
+                    path than the one created. That is worth understanding \
+                    before the foreign rows are read -- it may mean the app is \
+                    not on the volume it thinks it is, or that the form which \
+                    worked is the one this probe did not expect.
                     """
-                    : """
-                    CONTROL FAILED: no path came back for an object the app owns \
-                    and can stat. Every row in the next group is therefore \
-                    inconclusive, and a refusal there would be \
-                    indistinguishable from the machinery not running.
-                    """
+                    : a.err == Int32(EFAULT) && b.err == Int32(EFAULT)
+                        ? """
+                        CONTROL FAILED, and not for an authorization reason: \
+                        both forms answered EFAULT for an object the app owns \
+                        and can stat. EFAULT says the callee rejected an \
+                        address, not that a path was refused, so the call itself \
+                        is malformed rather than the boundary holding. Every row \
+                        in the next group is inconclusive beside it.
+                        """
+                        : """
+                        CONTROL FAILED: no path came back for an object the app \
+                        owns and can stat. Every row in the next group is \
+                        therefore inconclusive, and a refusal there would be \
+                        indistinguishable from the machinery not running.
+                        """
         )]
     }
 
@@ -384,46 +493,22 @@ public enum FsGetPathProbe {
         for object in [UInt64(1), 2, 3, 4, 5, 6, 7, 8, 15, 16, 24] where
             rows.count < maxForeignProbes
         {
-            let (path, rc, err) = getPath(volume, object)
+            let (a, b) = getPath(
+                volume: volume, object: object, deviceID: st.deviceID
+            )
+            let answered = a.path != nil || b.path != nil
             rows.append(Entry(
                 id: "fsgetpath-foreign-object-\(object)",
                 group: groupForeign,
                 operation: "fsgetpath(buf, 1024, volume=\(volume), object=\(object))",
                 target: "object \(object) on the app's own volume",
-                outcome: classify(rc, err),
-                errnoName: rc > 0 ? nil : ErrorClassifier.errnoName(err),
-                returnedValue: rc > 0 ? "path (\(rc) bytes)" : "\(rc)",
-                observed: path.map { "fsgetpath returned \"\($0)\"" }
-                    ?? "fsgetpath returned \(rc), errno=\(ErrorClassifier.errnoName(err))",
-                interpretation: rc > 0
-                    ? """
-                    A path was obtained for object \(object) on this volume, an \
-                    object the app has never opened and was never given a path \
-                    to. That is a path-disclosure primitive reached by \
-                    addressing a vnode as a pair of numbers. It is recorded with \
-                    isBoundaryViolation false because the answer came from a \
-                    simulator or CI host -- a macOS process, under a different \
-                    sandbox -- and only a stock iOS 27.0 device makes it a \
-                    finding. What it would mean if real is specific: the app \
-                    could learn the names of files it is forbidden to name.
-                    """
-                    : err == Int32(EPERM)
-                        ? """
-                        EPERM: the sandbox gates the by-number lookup exactly as \
-                        it gates the by-name one. The app cannot learn a path it \
-                        was refused, which is the correct answer.
-                        """
-                        : err == Int32(ENOENT)
-                            ? """
-                            ENOENT: there is no such object on this volume. That is \
-                            an answer about the object, not about the boundary, \
-                            and it is the expected shape for ids the app invented.
-                            """
-                            : """
-                            The answer was \(ErrorClassifier.errnoName(err)), which \
-                            is neither EPERM nor ENOENT. Recorded as it stands \
-                            rather than attributed to either cause.
-                            """
+                outcome: answered ? .answered : classify(a.rc, a.err),
+                errnoName: answered ? nil : ErrorClassifier.errnoName(a.err),
+                returnedValue: answered ? "path" : "\(a.rc)",
+                observed: "\(describe(a)); \(describe(b))",
+                interpretation: interpret(
+                    a, b, target: "object \(object) on this volume"
+                )
             ))
         }
         return rows
@@ -441,30 +526,20 @@ public enum FsGetPathProbe {
             ("fsgetpath-foreign-volume-zero", UInt64(0)),
             ("fsgetpath-foreign-volume-one", UInt64(1))
         ] {
-            let (path, rc, err) = getPath(volume, 2)
+            let (a, b) = getPath(volume: volume, object: 2, deviceID: Int32(volume))
+            let answered = a.path != nil || b.path != nil
             rows.append(Entry(
                 id: id,
                 group: groupVolume,
                 operation: "fsgetpath(buf, 1024, volume=\(volume), object=2)",
                 target: "object 2 on volume \(volume)",
-                outcome: classify(rc, err),
-                errnoName: rc > 0 ? nil : ErrorClassifier.errnoName(err),
-                returnedValue: rc > 0 ? "path (\(rc) bytes)" : "\(rc)",
-                observed: path.map { "fsgetpath returned \"\($0)\"" }
-                    ?? "fsgetpath returned \(rc), errno=\(ErrorClassifier.errnoName(err))",
-                interpretation: rc > 0
-                    ? """
-                    A path was obtained on a volume the app has no object on. \
-                    Recorded with isBoundaryViolation false for the same reason \
-                    as the foreign-object rows: a simulator or CI-host answer is \
-                    a macOS answer. If real, it would mean the lookup is not \
-                    even scoped to the volume the app can see.
-                    """
-                    : """
-                    Refused, errno \(ErrorClassifier.errnoName(err)). A refusal \
-                    here alongside refusals on the app's own volume is the \
-                    boundary holding consistently rather than selectively.
-                    """
+                outcome: answered ? .answered : classify(a.rc, a.err),
+                errnoName: answered ? nil : ErrorClassifier.errnoName(a.err),
+                returnedValue: answered ? "path" : "\(a.rc)",
+                observed: "\(describe(a)); \(describe(b))",
+                interpretation: interpret(
+                    a, b, target: "object 2 on volume \(volume)"
+                )
             ))
         }
         return rows
