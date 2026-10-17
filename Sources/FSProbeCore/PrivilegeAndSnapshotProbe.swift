@@ -747,14 +747,20 @@ public enum PrivilegeAndSnapshotProbe {
     private static let xattrBufferBytes = 4096
     private static let maxListedXattrNames = 32
 
+    // setxattr returns C `int` (Int32) while the others return ssize_t (Int),
+    // so each helper pins its closure's result type explicitly. Without the
+    // annotation the nested withCString closures cannot infer a type and the
+    // build fails with "type of expression is ambiguous" -- which is a
+    // confusing way to be told that two POSIX calls disagree about width.
     private static func setXAttr(_ path: String, _ name: String, _ value: String) -> Int {
-        path.withCString { pathPtr in
+        let rc: Int32 = path.withCString { pathPtr in
             name.withCString { namePtr in
                 value.withCString { valuePtr in
                     setxattr(pathPtr, namePtr, valuePtr, value.utf8.count, 0, 0)
                 }
             }
         }
+        return Int(rc)
     }
 
     private static func getXAttr(_ path: String, _ name: String, _ buffer: inout [UInt8]) -> Int {
@@ -785,11 +791,12 @@ public enum PrivilegeAndSnapshotProbe {
     }
 
     private static func removeXAttr(_ path: String, _ name: String) -> Int {
-        path.withCString { pathPtr in
+        let rc: Int32 = path.withCString { pathPtr in
             name.withCString { namePtr in
                 removexattr(pathPtr, namePtr, 0)
             }
         }
+        return Int(rc)
     }
 
     private static func xattrEntries() -> [Entry] {

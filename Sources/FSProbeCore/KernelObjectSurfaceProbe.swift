@@ -264,6 +264,25 @@ public enum KernelObjectSurfaceProbe {
     // three-argument pointer calls it safely.
     private typealias SemCtlFn = @convention(c) (Int32, Int32, Int32) -> Int32
 
+    // shm_open is `int shm_open(const char *, int, ...)` -- variadic for the
+    // same reason as sem_open, so it is bound the same way. The third argument
+    // is mode_t, passed as UInt32.
+    private typealias ShmOpenFn = @convention(c) (
+        UnsafePointer<CChar>, Int32, UInt32
+    ) -> Int32
+
+    // mq_close and mq_unlink live in <mqueue.h>, which the Swift Darwin
+    // overlay does not import, so they are resolved with dlsym rather than
+    // named directly.
+    private typealias MqCloseFn = @convention(c) (Int32) -> Int32
+    private typealias MqUnlinkFn = @convention(c) (UnsafePointer<CChar>) -> Int32
+
+    /// SYSPROTO_CONTROL from <sys/kern_control.h>: the protocol that selects a
+    /// kernel-control socket. The Swift overlay does not import the constant,
+    /// so it is spelled here with its documented value rather than guessed at
+    /// a call site.
+    private static let sysprotoControl: Int32 = 2
+
     private static func semaphoreCase(name: String) -> Entry {
         guard let symbol = POSIXShim.lookupSymbol("sem_open") else {
             return Entry(
@@ -335,9 +354,22 @@ public enum KernelObjectSurfaceProbe {
         let mqErr = mqRC >= 0 ? 0 : currentErrno()
         var observed: String
         if mqRC >= 0 {
-            let closeRC = mq_close(mqRC)
-            let unlinkRC = name.withCString { mq_unlink($0) }
-            observed = "mq_open(O_CREAT|O_RDWR, NULL attrs) returned mqd_t \(mqRC); mq_close -> \(closeRC); mq_unlink -> \(unlinkRC)"
+            // mq_close/mq_unlink are not in the Swift overlay, so each is
+            // resolved separately and an unresolved one is recorded as such
+            // rather than skipped silently -- a queue left open because a
+            // teardown symbol was missing is still a leak, and it is one the
+            // report has to be able to show.
+            var closeDesc = "mq_close unresolved"
+            if let sym = POSIXShim.lookupSymbol("mq_close") {
+                let fn = unsafeBitCast(sym, to: MqCloseFn.self)
+                closeDesc = "mq_close -> \(fn(mqRC))"
+            }
+            var unlinkDesc = "mq_unlink unresolved"
+            if let sym = POSIXShim.lookupSymbol("mq_unlink") {
+                let fn = unsafeBitCast(sym, to: MqUnlinkFn.self)
+                unlinkDesc = "mq_unlink -> \(name.withCString { fn($0) })"
+            }
+            observed = "mq_open(O_CREAT|O_RDWR, NULL attrs) returned mqd_t \(mqRC); \(closeDesc); \(unlinkDesc)"
         } else {
             observed = "mq_open(O_CREAT|O_RDWR, NULL attrs) returned -1, errno=\(ErrorClassifier.errnoName(mqErr))"
         }
@@ -365,9 +397,31 @@ public enum KernelObjectSurfaceProbe {
     private static func posixIPCGroup() -> [Entry] {
         var rows: [Entry] = []
 
+        // shm_open is variadic, so the Swift importer marks it unavailable and
+        // it is resolved once here. A failure to resolve it means the whole
+        // POSIX-IPC group cannot be asked -- and that is recorded as
+        // unattempted rather than guessed at per case, because a group whose
+        // first mechanism is missing cannot answer for the others either.
+        guard let shmSymbol = POSIXShim.lookupSymbol("shm_open") else {
+            return [Entry(
+                id: "posix-ipc-control", group: groupIPCObjects,
+                operation: "shm_open(O_RDWR)",
+                target: controlIPCName,
+                outcome: .symbolUnavailable, errnoName: nil, returnedValue: nil,
+                observed: "shm_open could not be resolved with dlsym",
+                interpretation: """
+                    NOT ATTEMPTED: the shm_open symbol is absent from the process \
+                    image, so no POSIX-IPC predicate could be asked. The \
+                    semaphore and message-queue cases below still run, because \
+                    their symbols are independent.
+                    """
+            )]
+        }
+        let shmOpen = unsafeBitCast(shmSymbol, to: ShmOpenFn.self)
+
         // --- control FIRST ---
         setErrno(0)
-        let crc = controlIPCName.withCString { shm_open($0, O_RDWR, 0) }
+        let crc = controlIPCName.withCString { shmOpen($0, O_RDWR, 0) }
         let cerr = crc >= 0 ? 0 : currentErrno()
         let controlOK = crc == -1 && cerr == Int32(ENOENT)
         rows.append(objectCase(
@@ -396,7 +450,7 @@ public enum KernelObjectSurfaceProbe {
         // --- shm_open create + unlink ---
         let shmName = "/fsprobe-posix-ipc"
         setErrno(0)
-        let shmRC = shmName.withCString { shm_open($0, O_RDWR | O_CREAT, 0o600) }
+        let shmRC = shmName.withCString { shmOpen($0, O_RDWR | O_CREAT, 0o600) }
         let shmErr = shmRC >= 0 ? 0 : currentErrno()
         var shmObserved: String
         if shmRC >= 0 {
@@ -436,7 +490,7 @@ public enum KernelObjectSurfaceProbe {
         // --- namespace-escape attempt ---
         let escapeName = "/../fsprobe-escape"
         setErrno(0)
-        let escRC = escapeName.withCString { shm_open($0, O_RDWR, 0) }
+        let escRC = escapeName.withCString { shmOpen($0, O_RDWR, 0) }
         let escErr = escRC >= 0 ? 0 : currentErrno()
         rows.append(objectCase(
             id: "posix-ipc-escape",
@@ -674,7 +728,7 @@ public enum KernelObjectSurfaceProbe {
         rows.append(socketCase(
             id: "socket-af-system-dgram",
             target: "AF_SYSTEM/SOCK_DGRAM/SYSPROTO_CONTROL",
-            domain: Int32(AF_SYSTEM), type: SOCK_DGRAM, proto: Int32(SYSPROTO_CONTROL),
+            domain: Int32(AF_SYSTEM), type: SOCK_DGRAM, proto: sysprotoControl,
             interpretation: """
                 AF_SYSTEM with SYSPROTO_CONTROL is the lowest layer XPC rides \
                 on. A permitted control socket does NOT mean XPC services are \
