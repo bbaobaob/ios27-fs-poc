@@ -131,6 +131,17 @@ public enum SandboxExtensionProbe {
 
     private static let outsideTarget = "/etc/passwd"
 
+    /// MACH_PORT_NULL. `sandbox_extension_issue_file` takes an extension
+    /// port, and every documented caller passes either a real task port or
+    /// MACH_PORT_NULL to mean "the current process". Passing
+    /// `MachShim.taskSelf` produced EFAULT for every path -- including a
+    /// file that demonstrably exists -- which is not an authorization
+    /// answer at all: EFAULT says the callee rejected an address, and the
+    /// only address it is handed that this code controls is the port.
+    /// MACH_PORT_NULL is the documented way to ask for the current
+    /// process, and it removes this code's contribution to the answer.
+    private static let machPortNull: UInt32 = 0
+
     public static func probe() -> Result {
         #if canImport(Darwin)
         var entries: [Entry] = []
@@ -283,7 +294,7 @@ public enum SandboxExtensionProbe {
 
         var handle: UnsafeMutableRawPointer? = nil
         setErrno(0)
-        let token = own.withCString { issue(MachShim.taskSelf, $0, 0, &handle) }
+        let token = own.withCString { issue(machPortNull, $0, 0, &handle) }
         let tokenErr = currentErrno()
         var observed: String
         if let token {
@@ -328,11 +339,23 @@ public enum SandboxExtensionProbe {
                     refusal in the next group a statement about the boundary \
                     rather than about the mechanism being unavailable.
                     """
-                : """
+                : tokenErr == Int32(EFAULT)
+                    ? """
+                    CONTROL FAILED, and not for an authorization reason: EFAULT \
+                    says the callee rejected an address, not that the path was \
+                    refused. The only address this code hands it that it \
+                    controls is the handle-out pointer and the extension port, \
+                    so an EFAULT here means the call itself is malformed \
+                    rather than that the boundary held. Every row in the next \
+                    group is inconclusive beside it, and the EFAULT must be \
+                    explained before any refusal there means anything.
+                    """
+                    : """
                     CONTROL FAILED: no token came back even for the app's own \
-                    file. Every row in the next group is therefore \
-                    inconclusive -- a refusal there would be \
-                    indistinguishable from the machinery simply not running.
+                    file, errno \(ErrorClassifier.errnoName(tokenErr)). Every \
+                    row in the next group is therefore inconclusive -- a \
+                    refusal there would be indistinguishable from the machinery \
+                    simply not running.
                     """
         ))
 
@@ -365,7 +388,7 @@ public enum SandboxExtensionProbe {
         var passwdHandle: UnsafeMutableRawPointer? = nil
         setErrno(0)
         let passwdToken = outsideTarget.withCString {
-            issue(MachShim.taskSelf, $0, 0, &passwdHandle)
+            issue(machPortNull, $0, 0, &passwdHandle)
         }
         let passwdErr = currentErrno()
         var passwdObserved: String
@@ -407,11 +430,19 @@ public enum SandboxExtensionProbe {
                     the open path is. The app cannot manufacture a credential \
                     for a path it cannot reach, which is the correct answer.
                     """
-                    : """
-                    The answer was \(ErrorClassifier.errnoName(passwdErr)) rather \
-                    than EPERM. ENOENT would be a missing file, ENOSYS an \
-                    unimplemented mechanism -- neither is a boundary statement.
-                    """
+                    : passwdErr == Int32(EFAULT)
+                        ? """
+                        EFAULT, which is not an authorization answer: it says the \
+                        callee rejected an address. The own-file control above \
+                        answers the same way, which means the call is malformed \
+                        rather than that the boundary held. This row is \
+                        inconclusive until the EFAULT is explained.
+                        """
+                        : """
+                        The answer was \(ErrorClassifier.errnoName(passwdErr)) rather \
+                        than EPERM. ENOENT would be a missing file, ENOSYS an \
+                        unimplemented mechanism -- neither is a boundary statement.
+                        """
         ))
 
         // --- / and /var/mobile ---
@@ -421,7 +452,7 @@ public enum SandboxExtensionProbe {
         ] {
             var h: UnsafeMutableRawPointer? = nil
             setErrno(0)
-            let tok = path.withCString { issue(MachShim.taskSelf, $0, 0, &h) }
+            let tok = path.withCString { issue(machPortNull, $0, 0, &h) }
             let err = currentErrno()
             var obs: String
             if let tok {
