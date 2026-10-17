@@ -46,11 +46,24 @@ public enum ErrorClassifier {
         case Int32(EPIPE): return "EPIPE"
         case Int32(EDEADLK): return "EDEADLK"
         case Int32(ENAMETOOLONG): return "ENAMETOOLONG"
-        case Int32(ENOLCK): return "ENOLCK"
-        case Int32(ENOSYS): return "ENOSYS"
-        case Int32(ENOTEMPTY): return "ENOTEMPTY"
         case Int32(ELOOP): return "ELOOP"
         case Int32(EOVERFLOW): return "EOVERFLOW"
+        // The first of the two below is not academic. `socket(AF_UNSPEC, ...)`
+        // answers EAFNOSUPPORT, which is what the socket-family control is
+        // *supposed* to see -- and an unnamed errno rendered it as "errno(47)",
+        // i.e. as an anomaly rather than as the control's expected answer.
+        //
+        // ENOATTR is spelled numerically because <sys/errno.h> defines it
+        // conditionally and the Swift Darwin module does not export it at all,
+        // so `Int32(ENOATTR)` does not compile. Its value on Darwin is 93 and
+        // it is what getxattr answers for a name that does not exist -- the
+        // extended-attribute equivalent of ENOENT. Without a name that answer
+        // read as "errno(93)" and looked like a boundary question instead of
+        // the absence of one attribute.
+        case Int32(EAFNOSUPPORT): return "EAFNOSUPPORT"
+        #if canImport(Darwin)
+        case 93: return "ENOATTR"
+        #endif
         default: return "errno(\(code))"
         }
     }
