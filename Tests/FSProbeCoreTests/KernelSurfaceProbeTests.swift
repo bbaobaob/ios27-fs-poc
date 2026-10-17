@@ -398,4 +398,70 @@ final class KernelSurfaceProbeTests: XCTestCase {
         XCTAssertFalse(SymlinkAndRaceProbe.probe().entries.isEmpty)
         XCTAssertFalse(SandboxExtensionProbe.probe().entries.isEmpty)
     }
+
+    // MARK: - FsGetPathProbe
+
+    func testAPathObtainedByNumberIsNotAConfirmedFinding() {
+        // The one question in the project that supplies no path at all. If it
+        // answers for an object the app never opened, the app has learned a
+        // name it was forbidden to speak -- and that is still not a finding
+        // from a simulator or CI host, because those are macOS processes under
+        // a different sandbox.
+        let cases: [FsGetPathProbe.Outcome] = [
+            .answered, .denied, .notFound, .otherError, .notAttempted, .symbolUnavailable
+        ]
+        for outcome in cases {
+            let entry = FsGetPathProbe.Entry(
+                id: "case", group: "objects the app has no path to",
+                operation: "fsgetpath(buf, 1024, volume, object)",
+                target: "object 2 on the app's own volume",
+                outcome: outcome, errnoName: nil, returnedValue: nil,
+                observed: "obs", interpretation: "interp"
+            )
+            XCTAssertFalse(entry.isBoundaryViolation,
+                           "\(outcome) must never be a violation")
+        }
+    }
+
+    func testFsGetPathControlLeads() {
+        // The control must return the path the app created, addressed by the
+        // (volume, object) pair read out of that same file. Without it, a
+        // refusal on a foreign object says only that fsgetpath is unavailable.
+        let result = FsGetPathProbe.probe()
+        XCTAssertFalse(result.entries.isEmpty)
+        #if canImport(Darwin)
+        guard let control = result.entries.first(
+            where: { $0.id == "fsgetpath-control-own-object" }
+        ) else {
+            XCTFail("the own-object control must be present on Darwin")
+            return
+        }
+        XCTAssertNotEqual(control.outcome, .symbolUnavailable,
+                          "fsgetpath must resolve on Darwin")
+        if control.outcome != .answered {
+            XCTAssertTrue(
+                control.interpretation.contains("CONTROL FAILED"),
+                """
+                a control that produced no path must be labelled as failed, \
+                not silently left to read as a refusal by the boundary
+                """
+            )
+        }
+        #else
+        XCTAssertEqual(Set(result.entries.map { $0.group }).count, 3)
+        #endif
+    }
+
+    func testFsGetPathViolationsAreAlwaysEmpty() {
+        let result = FsGetPathProbe.probe()
+        XCTAssertTrue(result.violations.isEmpty)
+        XCTAssertTrue(result.violationsAlwaysEmpty)
+    }
+
+    func testForeignProbesAreBounded() {
+        // Each foreign object id is a syscall, and the interesting answer is
+        // whether ANY is answered, not how many there are. The bound is a
+        // safety property, so it is pinned.
+        XCTAssertEqual(FsGetPathProbe.maxForeignProbes, 24)
+    }
 }

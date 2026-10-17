@@ -93,6 +93,7 @@ public struct MatrixRunner: Sendable {
         var kqueueProcessWatch: KqueueProcessWatchProbe.Result?
         var symlinkAndRace: SymlinkAndRaceProbe.Result?
         var sandboxExtension: SandboxExtensionProbe.Result?
+        var fsGetPath: FsGetPathProbe.Result?
 
         /// The matrix as it stands right now.
         ///
@@ -142,7 +143,8 @@ public struct MatrixRunner: Sendable {
                 privilegeAndSnapshot: privilegeAndSnapshot,
                 kqueueProcessWatch: kqueueProcessWatch,
                 symlinkAndRace: symlinkAndRace,
-                sandboxExtension: sandboxExtension
+                sandboxExtension: sandboxExtension,
+                fsGetPath: fsGetPath
             )
         }
 
@@ -358,6 +360,14 @@ public struct MatrixRunner: Sendable {
             // container would be a boundary violation by construction.
             sandboxExtension = SandboxExtensionProbe.probe()
             reportProgress("sandbox-extension")
+
+            // The one question that supplies no path at all. fsgetpath takes a
+            // volume id and an object id -- two numbers -- and returns the path
+            // the kernel recorded. There is nothing to check, so the sandbox's
+            // usual hook never runs, and the app only needs a volume id, which
+            // it can get from a file it legitimately owns.
+            fsGetPath = FsGetPathProbe.probe()
+            reportProgress("fsgetpath")
         }
 
         return CapabilityMatrix(
@@ -400,7 +410,8 @@ public struct MatrixRunner: Sendable {
             privilegeAndSnapshot: privilegeAndSnapshot,
             kqueueProcessWatch: kqueueProcessWatch,
             symlinkAndRace: symlinkAndRace,
-            sandboxExtension: sandboxExtension
+            sandboxExtension: sandboxExtension,
+            fsGetPath: fsGetPath
         )
     }
 }

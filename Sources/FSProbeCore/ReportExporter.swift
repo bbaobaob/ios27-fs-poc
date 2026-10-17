@@ -908,6 +908,29 @@ public enum ReportExporter {
             }
         }
 
+        if let fp = matrix.fsGetPath {
+            lines.append("")
+            lines.append("fsgetpath: a path obtained by addressing a vnode as two numbers:")
+            var lastGroup: String?
+            for item in fp.entries {
+                if item.group != lastGroup {
+                    lines.append("  -- \(item.group) --")
+                    lastGroup = item.group
+                }
+                lines.append("  [\(item.outcome.rawValue)] \(item.id)  \(item.target)")
+                if let err = item.errnoName { lines.append("      errno: \(err)") }
+                if let rv = item.returnedValue { lines.append("      returned: \(rv)") }
+                if let obs = item.observed { lines.append("      observed: \(obs)") }
+                lines.append("      result: \(item.interpretation)")
+            }
+            if fp.entries.isEmpty {
+                lines.append("  NOT_ATTEMPTED: no fsgetpath experiment ran.")
+            } else {
+                lines.append("  no path is supplied, so there is no path to check:")
+                lines.append("  an answer for an object the app never opened is the question")
+            }
+        }
+
         if let io = matrix.inodeOpen {
             lines.append("")
             lines.append("Open-by-inode (openbyid_np: no path traversal at all):")
@@ -1050,6 +1073,7 @@ public enum ReportExporter {
         let kqueueProcessWatch: KqueueProcessWatchProbe.Result?
         let symlinkAndRace: SymlinkAndRaceProbe.Result?
         let sandboxExtension: SandboxExtensionProbe.Result?
+        let fsGetPath: FsGetPathProbe.Result?
 
         init(matrix: CapabilityMatrix) {
             self.schema = "fsprobe.capability-matrix.v10"
@@ -1095,6 +1119,7 @@ public enum ReportExporter {
             self.kqueueProcessWatch = matrix.kqueueProcessWatch
             self.symlinkAndRace = matrix.symlinkAndRace
             self.sandboxExtension = matrix.sandboxExtension
+            self.fsGetPath = matrix.fsGetPath
         }
     }
 }

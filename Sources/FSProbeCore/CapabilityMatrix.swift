@@ -103,6 +103,8 @@ public struct CapabilityMatrix: Sendable {
     public let symlinkAndRace: SymlinkAndRaceProbe.Result?
     /// Whether an ordinary app can MINT a sandbox extension.
     public let sandboxExtension: SandboxExtensionProbe.Result?
+    /// Whether a path can be obtained by addressing a vnode as two numbers.
+    public let fsGetPath: FsGetPathProbe.Result?
 
     /// Results of testing whether a user-granted scope is confined to what the
     /// user picked. Nil until the user grants access.
@@ -152,7 +154,8 @@ public struct CapabilityMatrix: Sendable {
         privilegeAndSnapshot: PrivilegeAndSnapshotProbe.Result? = nil,
         kqueueProcessWatch: KqueueProcessWatchProbe.Result? = nil,
         symlinkAndRace: SymlinkAndRaceProbe.Result? = nil,
-        sandboxExtension: SandboxExtensionProbe.Result? = nil
+        sandboxExtension: SandboxExtensionProbe.Result? = nil,
+        fsGetPath: FsGetPathProbe.Result? = nil
     ) {
         self.results = results
         self.environment = environment
@@ -196,6 +199,7 @@ public struct CapabilityMatrix: Sendable {
         self.kqueueProcessWatch = kqueueProcessWatch
         self.symlinkAndRace = symlinkAndRace
         self.sandboxExtension = sandboxExtension
+        self.fsGetPath = fsGetPath
     }
 
     /// Platform context captured at run time.
