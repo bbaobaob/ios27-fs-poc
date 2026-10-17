@@ -91,6 +91,12 @@ public struct CapabilityMatrix: Sendable {
     public let ioKitCensus: IOKitCensusProbe.Result?
     /// Whether the metadata index leaks names outside the container.
     public let spotlightEnumeration: SpotlightEnumerationProbe.Result?
+    /// Which visible kernel services will actually accept a user client.
+    public let ioKitUserClients: IOKitUserClientOpenProbe.Result?
+    /// POSIX IPC objects, socket families, and device nodes.
+    public let kernelObjectSurface: KernelObjectSurfaceProbe.Result?
+    /// Privilege primitives, APFS snapshots, xattrs, rename swap, foreign fds.
+    public let privilegeAndSnapshot: PrivilegeAndSnapshotProbe.Result?
 
     /// Results of testing whether a user-granted scope is confined to what the
     /// user picked. Nil until the user grants access.
@@ -134,7 +140,10 @@ public struct CapabilityMatrix: Sendable {
         embeddedXPCServices: EmbeddedXPCServiceProbe.Result? = nil,
         keychainIsolation: KeychainIsolationProbe.Result? = nil,
         ioKitCensus: IOKitCensusProbe.Result? = nil,
-        spotlightEnumeration: SpotlightEnumerationProbe.Result? = nil
+        spotlightEnumeration: SpotlightEnumerationProbe.Result? = nil,
+        ioKitUserClients: IOKitUserClientOpenProbe.Result? = nil,
+        kernelObjectSurface: KernelObjectSurfaceProbe.Result? = nil,
+        privilegeAndSnapshot: PrivilegeAndSnapshotProbe.Result? = nil
     ) {
         self.results = results
         self.environment = environment
@@ -172,6 +181,9 @@ public struct CapabilityMatrix: Sendable {
         self.keychainIsolation = keychainIsolation
         self.ioKitCensus = ioKitCensus
         self.spotlightEnumeration = spotlightEnumeration
+        self.ioKitUserClients = ioKitUserClients
+        self.kernelObjectSurface = kernelObjectSurface
+        self.privilegeAndSnapshot = privilegeAndSnapshot
     }
 
     /// Platform context captured at run time.

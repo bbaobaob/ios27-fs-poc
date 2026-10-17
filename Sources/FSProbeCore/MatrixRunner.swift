@@ -87,6 +87,9 @@ public struct MatrixRunner: Sendable {
         var keychainIsolation: KeychainIsolationProbe.Result?
         var ioKitCensus: IOKitCensusProbe.Result?
         var spotlightEnumeration: SpotlightEnumerationProbe.Result?
+        var ioKitUserClients: IOKitUserClientOpenProbe.Result?
+        var kernelObjectSurface: KernelObjectSurfaceProbe.Result?
+        var privilegeAndSnapshot: PrivilegeAndSnapshotProbe.Result?
 
         /// The matrix as it stands right now.
         ///
@@ -130,7 +133,10 @@ public struct MatrixRunner: Sendable {
                 embeddedXPCServices: embeddedXPCServices,
                 keychainIsolation: keychainIsolation,
                 ioKitCensus: ioKitCensus,
-                spotlightEnumeration: spotlightEnumeration
+                spotlightEnumeration: spotlightEnumeration,
+                ioKitUserClients: ioKitUserClients,
+                kernelObjectSurface: kernelObjectSurface,
+                privilegeAndSnapshot: privilegeAndSnapshot
             )
         }
 
@@ -302,6 +308,27 @@ public struct MatrixRunner: Sendable {
             // mechanism works before the broad query is read.
             spotlightEnumeration = SpotlightEnumerationProbe.probe(containerPath: container)
             reportProgress("spotlight-enumeration")
+
+            // The census enumerated names; this asks the question the census
+            // exists to aim: will any visible service accept a user client?
+            // IOServiceOpen then an immediate IOServiceClose -- never an
+            // external method, because the method is the experiment and this
+            // is the reconnaissance that tells us whether it is worth running.
+            ioKitUserClients = IOKitUserClientOpenProbe.probe()
+            reportProgress("iokit-user-client-open")
+
+            // Kernel objects reached by mechanisms other than the filesystem:
+            // named POSIX IPC objects, socket families, and device nodes. Each
+            // is a separate sandbox predicate, so a pass here is not implied
+            // by any filesystem result.
+            kernelObjectSurface = KernelObjectSurfaceProbe.probe()
+            reportProgress("kernel-object-surface")
+
+            // The classic escape primitives, none of them measured until now:
+            // privilege manipulation, APFS snapshot control, extended
+            // attributes, rename-exchange, and another process's descriptors.
+            privilegeAndSnapshot = PrivilegeAndSnapshotProbe.probe()
+            reportProgress("privilege-and-snapshot")
         }
 
         return CapabilityMatrix(
@@ -338,7 +365,10 @@ public struct MatrixRunner: Sendable {
             embeddedXPCServices: embeddedXPCServices,
             keychainIsolation: keychainIsolation,
             ioKitCensus: ioKitCensus,
-            spotlightEnumeration: spotlightEnumeration
+            spotlightEnumeration: spotlightEnumeration,
+            ioKitUserClients: ioKitUserClients,
+            kernelObjectSurface: kernelObjectSurface,
+            privilegeAndSnapshot: privilegeAndSnapshot
         )
     }
 }

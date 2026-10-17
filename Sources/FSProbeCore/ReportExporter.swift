@@ -764,6 +764,80 @@ public enum ReportExporter {
             }
         }
 
+        if let uc = matrix.ioKitUserClients {
+            lines.append("")
+            lines.append("IOKit user clients: which visible services will ACCEPT an open?")
+            let opened = uc.entries.filter { $0.outcome == .opened }
+            for entry in uc.entries {
+                lines.append("  [\(entry.outcome.rawValue)] \(entry.id)")
+                if let name = entry.serviceName {
+                    lines.append("      service: \(name)")
+                }
+                lines.append("      \(entry.operation)")
+                if let kr = entry.kernReturn { lines.append("      kern_return_t: \(kr)") }
+                if entry.openedConnect { lines.append("      connect port: non-null (closed immediately)") }
+                if let obs = entry.observed { lines.append("      observed: \(obs)") }
+            }
+            if !opened.isEmpty {
+                lines.append("  \(opened.count) service(s) accepted a user client:")
+                for e in opened.prefix(20) {
+                    lines.append("    \(e.serviceName ?? "(unnamed)")")
+                }
+                lines.append("  reachable attack surface only -- a finding needs the driver to")
+                lines.append("  DO something for an unidentified caller, which is the next experiment")
+            } else if uc.entries.isEmpty {
+                lines.append("  NOT_ATTEMPTED: no user-client experiment ran.")
+            } else {
+                lines.append("  no visible service accepted a user client")
+            }
+        }
+
+        if let ko = matrix.kernelObjectSurface {
+            lines.append("")
+            lines.append("Kernel objects by a mechanism other than the filesystem:")
+            var lastGroup: String?
+            for item in ko.entries {
+                if item.group != lastGroup {
+                    lines.append("  -- \(item.group) --")
+                    lastGroup = item.group
+                }
+                lines.append("  [\(item.outcome.rawValue)] \(item.id)  \(item.target)")
+                if let err = item.errnoName { lines.append("      errno: \(err)") }
+                if let rv = item.returnedValue { lines.append("      returned: \(rv)") }
+                if let obs = item.observed { lines.append("      observed: \(obs)") }
+                lines.append("      result: \(item.interpretation)")
+            }
+            if ko.entries.isEmpty {
+                lines.append("  NOT_ATTEMPTED: no kernel-object case ran.")
+            } else {
+                lines.append("  no entry is a finding on its own: each is a separate sandbox")
+                lines.append("  predicate, and a permitted answer is recorded for what it is")
+            }
+        }
+
+        if let ps = matrix.privilegeAndSnapshot {
+            lines.append("")
+            lines.append("Escape primitives: privilege, snapshots, xattrs, rename swap, foreign fds:")
+            var lastGroup: String?
+            for item in ps.entries {
+                if item.group != lastGroup {
+                    lines.append("  -- \(item.group) --")
+                    lastGroup = item.group
+                }
+                lines.append("  [\(item.outcome.rawValue)] \(item.id)  \(item.target)")
+                if let err = item.errnoName { lines.append("      errno: \(err)") }
+                if let rv = item.returnedValue { lines.append("      returned: \(rv)") }
+                if let obs = item.observed { lines.append("      observed: \(obs)") }
+                lines.append("      result: \(item.interpretation)")
+            }
+            if ps.entries.isEmpty {
+                lines.append("  NOT_ATTEMPTED: no escape-primitive case ran.")
+            } else {
+                lines.append("  a permitted answer here is a candidate, never a confirmed finding:")
+                lines.append("  it must be reproduced on a stock iOS 27.0 device before it is one")
+            }
+        }
+
         if let io = matrix.inodeOpen {
             lines.append("")
             lines.append("Open-by-inode (openbyid_np: no path traversal at all):")
@@ -900,9 +974,12 @@ public enum ReportExporter {
         let keychainIsolation: KeychainIsolationProbe.Result?
         let ioKitCensus: IOKitCensusProbe.Result?
         let spotlightEnumeration: SpotlightEnumerationProbe.Result?
+        let ioKitUserClients: IOKitUserClientOpenProbe.Result?
+        let kernelObjectSurface: KernelObjectSurfaceProbe.Result?
+        let privilegeAndSnapshot: PrivilegeAndSnapshotProbe.Result?
 
         init(matrix: CapabilityMatrix) {
-            self.schema = "fsprobe.capability-matrix.v9"
+            self.schema = "fsprobe.capability-matrix.v10"
             self.environment = matrix.environment
             self.results = matrix.results
             self.ancestors = matrix.ancestors
@@ -939,6 +1016,9 @@ public enum ReportExporter {
             self.keychainIsolation = matrix.keychainIsolation
             self.ioKitCensus = matrix.ioKitCensus
             self.spotlightEnumeration = matrix.spotlightEnumeration
+            self.ioKitUserClients = matrix.ioKitUserClients
+            self.kernelObjectSurface = matrix.kernelObjectSurface
+            self.privilegeAndSnapshot = matrix.privilegeAndSnapshot
         }
     }
 }

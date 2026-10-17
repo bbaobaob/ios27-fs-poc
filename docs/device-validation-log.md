@@ -45,7 +45,7 @@ iPhone running iOS 27. Neither is available here.
 
 ## Runs
 
-**Schema tag.** The exporter currently writes `fsprobe.capability-matrix.v9`. Entries below that
+**Schema tag.** The exporter currently writes `fsprobe.capability-matrix.v10`. Entries below that
 quote an earlier tag (`v1`, `v2`, …) record what that dated artifact actually contained; they are
 historical records of a specific build and are not rewritten when the tag advances. The tag to
 expect from the current code is the one stated here.

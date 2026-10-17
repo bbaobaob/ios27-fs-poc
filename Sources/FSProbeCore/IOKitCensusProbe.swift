@@ -374,6 +374,31 @@ final class IOKitShim: Sendable {
     private typealias GetNameFn = @convention(c) (
         UInt32, UnsafeMutablePointer<CChar>
     ) -> Int32
+    // IOServiceOpen(service, owningTask, type, &connect) -> kern_return_t
+    private typealias OpenFn = @convention(c) (
+        UInt32, UInt32, UInt32, UnsafeMutablePointer<UInt32>
+    ) -> Int32
+    // IOServiceClose(connect) -> kern_return_t
+    private typealias CloseFn = @convention(c) (UInt32) -> Int32
+
+    /// Open a user-client connection to one service. `type` is the user-client
+    /// type the driver expects; 0 is the default every driver must support.
+    /// Returns the connect port and the kern_return_t so the caller can record
+    /// the exact answer rather than collapsing it to a boolean.
+    func openService(_ service: UInt32, type: UInt32 = 0, task: UInt32) -> (connect: UInt32, kr: Int32) {
+        guard let open: OpenFn = symbol("IOServiceOpen") else {
+            return (0, -1)
+        }
+        var connect: UInt32 = 0
+        let kr = open(service, task, type, &connect)
+        return (connect, kr)
+    }
+
+    /// Close a user-client connection opened by `openService`.
+    func closeService(_ connect: UInt32) -> Int32 {
+        guard let close: CloseFn = symbol("IOServiceClose") else { return -1 }
+        return close(connect)
+    }
 
     /// The iterator for a service class. The matching dictionary is consumed
     /// by the call on success and released here on failure, so neither path
