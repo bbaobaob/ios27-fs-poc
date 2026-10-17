@@ -127,12 +127,9 @@ public enum SandboxExtensionProbe {
 
     private static let groupIssueOwn = "issuing for the app's own file"
     private static let groupIssueOutside = "issuing for a path outside the container"
-    private static let groupGetPath = "fcntl F_GETPATH on a descriptor"
+    private static let groupGetPath = "fgetpath on a descriptor"
 
     private static let outsideTarget = "/etc/passwd"
-
-    /// F_GETPATH from <fcntl.h>. Not exported by the Swift overlay.
-    private static let fGetPath: Int32 = 51
 
     public static func probe() -> Result {
         #if canImport(Darwin)
@@ -199,12 +196,8 @@ public enum SandboxExtensionProbe {
         UnsafeMutablePointer<UnsafeMutableRawPointer?>
     ) -> UnsafePointer<CChar>?
 
-    // The same, but the token is minted on behalf of another process, which
-    // is the shape a confused deputy would use.
-    private typealias IssueFileToProcessFn = @convention(c) (
-        UInt32, UnsafePointer<CChar>, UInt32, Int32
-    ) -> UnsafePointer<CChar>?
-
+    // The to-process variant is not bound: see the note in issueOutsideGroup
+    // for why calling it crashes the host app rather than answering.
     private typealias ConsumeFn = @convention(c) (
         UnsafePointer<CChar>
     ) -> Int32
@@ -213,11 +206,16 @@ public enum SandboxExtensionProbe {
         UnsafeMutableRawPointer?
     ) -> Int32
 
-    // fcntl is variadic (`int fcntl(int, int, ...)`), so the importer marks it
-    // unavailable and it is bound like the sandbox functions. F_GETPATH writes
-    // a NUL-terminated path into the caller's buffer.
-    private typealias FcntlGetPathFn = @convention(c) (
-        Int32, Int32, UnsafeMutablePointer<CChar>
+    // F_GETPATH is normally reached through `fcntl(fd, F_GETPATH, buf)`, but
+    // fcntl is variadic (`int fcntl(int, int, ...)`) and the Swift importer
+    // marks variadic C functions unavailable. Binding it as a fixed three-arg
+    // pointer and calling it would hand the third argument to the callee's
+    // va_list machinery, which on arm64e reads varargs from a different place
+    // than the fixed registers -- a garbage buffer pointer and a SIGSEGV.
+    // `fgetpath` is the non-variadic equivalent the platform provides for
+    // precisely this command, so it is used instead.
+    private typealias FGetPathFn = @convention(c) (
+        Int32, UnsafeMutablePointer<CChar>, Int
     ) -> Int32
 
     private static func bind<T>(_ name: String) -> T? {
@@ -463,56 +461,41 @@ public enum SandboxExtensionProbe {
             ))
         }
 
-        // --- issue_to_process targeting the caller's own pid ---
-        if let issueToProcess: IssueFileToProcessFn =
-            bind("sandbox_extension_issue_file_to_process") {
-            setErrno(0)
-            let tok = outsideTarget.withCString {
-                issueToProcess(MachShim.taskSelf, $0, 0, getpid())
-            }
-            let err = currentErrno()
-            rows.append(Entry(
-                id: "extension-outside-to-own-process",
-                group: groupIssueOutside,
-                operation: "sandbox_extension_issue_file_to_process(self, \(outsideTarget), 0, ownPid)",
-                target: outsideTarget,
-                outcome: tok != nil ? .issued : .denied,
-                errnoName: tok != nil ? nil : ErrorClassifier.errnoName(err),
-                returnedValue: tok != nil ? "non-null token" : "NULL",
-                observed: tok != nil
-                    ? "a token was minted on behalf of the caller's own pid"
-                    : "the token came back NULL, errno=\(ErrorClassifier.errnoName(err))",
-                interpretation: tok != nil
-                    ? """
-                    A token was minted FOR ANOTHER PROCESS -- even though the \
-                    target here is the caller itself. That variant exists so \
-                    one process can grant another, which is the shape a \
-                    confused deputy would use, and it is recorded with \
-                    isBoundaryViolation false only because the target pid is \
-                    the caller's own. The question that matters is whether the \
-                    PATH can be outside, and that is the row above.
-                    """
-                    : """
-                    Refused, errno \(ErrorClassifier.errnoName(err)). The \
-                    to-process variant is gated the same way as the \
-                    self variant.
-                    """
-            ))
-        } else {
-            rows.append(Entry(
-                id: "extension-outside-to-own-process",
-                group: groupIssueOutside,
-                operation: "sandbox_extension_issue_file_to_process",
-                target: outsideTarget,
-                outcome: .symbolUnavailable, errnoName: nil, returnedValue: nil,
-                observed: "sandbox_extension_issue_file_to_process could not be resolved",
-                interpretation: """
-                    NOT ATTEMPTED: the to-process variant is absent, so only \
-                    the self variant was measured. A missing variant is a \
-                    statement about the platform, not a refusal by it.
-                    """
-            ))
-        }
+        // --- the to-process variant is deliberately NOT measured ---
+        //
+        // It was implemented, and it crashed the app with EXC_BAD_ACCESS at
+        // 0x21da inside sandbox_extension_issue_file_to_process itself, on the
+        // iOS simulator. The self variant with the same `ext` port completed
+        // without incident on the rows above, so the difference is inside that
+        // function: it dereferences its target-process argument before the
+        // authorization check that lets the self variant return early.
+        //
+        // A probe is not allowed to crash the app it is measuring. Rather than
+        // guess at a signature that would make the call survivable -- a wrong
+        // guess here is a SIGSEGV, not a wrong answer -- the variant is
+        // recorded as unattempted with the reason stated. The question it
+        // would answer (can a token be minted for ANOTHER process) is not the
+        // one this probe exists for; the one above is.
+        rows.append(Entry(
+            id: "extension-outside-to-own-process",
+            group: groupIssueOutside,
+            operation: "sandbox_extension_issue_file_to_process(self, \(outsideTarget), 0, ownPid)",
+            target: outsideTarget,
+            outcome: .notAttempted, errnoName: nil, returnedValue: nil,
+            observed: "not attempted: the call crashed the host app (EXC_BAD_ACCESS at 0x21da)",
+            interpretation: """
+                NOT ATTEMPTED: this variant dereferences its target-process \
+                argument before the authorization check that lets the self \
+                variant above return early, and calling it through a \
+                dlsym-resolved pointer crashed the app. A probe that kills \
+                the process it is measuring has produced no measurement at \
+                all, so it is not retried with a guessed signature. The \
+                question this variant would answer -- whether a token can be \
+                minted on behalf of another process -- is a confused-deputy \
+                shape, and the row that matters for this probe is the self \
+                variant above, which asks whether the PATH can be outside.
+                """
+        ))
 
         return rows
     }
@@ -569,18 +552,19 @@ public enum SandboxExtensionProbe {
         }
         defer { _ = POSIXShim.closeFile(fd) }
 
-        guard let fcntlGetPath: FcntlGetPathFn = bind("fcntl") else {
+        guard let fgetpath: FGetPathFn = bind("fgetpath") else {
             rows.append(Entry(
                 id: "getpath-control-fcntl",
                 group: groupGetPath,
-                operation: "fcntl(fd, F_GETPATH, buf)",
+                operation: "fgetpath(fd, buf, len)",
                 target: own,
                 outcome: .symbolUnavailable, errnoName: nil, returnedValue: nil,
-                observed: "fcntl could not be resolved with dlsym",
+                observed: "fgetpath could not be resolved with dlsym",
                 interpretation: """
-                    NOT ATTEMPTED: fcntl is variadic and therefore unavailable \
-                    by name to the Swift importer, and it could not be resolved \
-                    with dlsym either. A statement about the platform.
+                    NOT ATTEMPTED: fgetpath is absent from the process image, \
+                    so the path-of-a-descriptor question could not be asked. A \
+                    missing symbol is a statement about the platform, not a \
+                    refusal by it.
                     """
             ))
             cleanup(own)
@@ -589,22 +573,22 @@ public enum SandboxExtensionProbe {
 
         var buf = [CChar](repeating: 0, count: 1024)
         setErrno(0)
-        let rc = fcntlGetPath(fd, fGetPath, &buf)
+        let rc = fgetpath(fd, &buf, buf.count)
         let err = currentErrno()
         let returned = rc == 0 ? String(cString: buf) : nil
         rows.append(Entry(
             id: "getpath-control-fcntl",
             group: groupGetPath,
-            operation: "fcntl(fd, F_GETPATH, buf)",
+            operation: "fgetpath(fd, buf, 1024)",
             target: own,
             outcome: rc == 0 ? .issued : .denied,
             errnoName: rc == 0 ? nil : ErrorClassifier.errnoName(err),
             returnedValue: "\(rc)",
-            observed: returned.map { "F_GETPATH returned \"\($0)\"" }
-                ?? "fcntl returned \(rc), errno=\(ErrorClassifier.errnoName(err))",
+            observed: returned.map { "fgetpath returned \"\($0)\"" }
+                ?? "fgetpath returned \(rc), errno=\(ErrorClassifier.errnoName(err))",
             interpretation: rc == 0
                 ? """
-                    CONTROL: F_GETPATH answered for a descriptor the app holds \
+                    CONTROL: fgetpath answered for a descriptor the app holds \
                     on its own file, so the mechanism works. What it cannot do \
                     is answer for a descriptor the app does not hold -- and \
                     that is the boundary, not a gap in it. F_GETPATH reads a \
@@ -612,7 +596,7 @@ public enum SandboxExtensionProbe {
                     does not resolve a path the app was refused.
                     """
                 : """
-                    F_GETPATH failed even for the app's own descriptor, \
+                    fgetpath failed even for the app's own descriptor, \
                     errno=\(ErrorClassifier.errnoName(err)). The mechanism is \
                     unavailable here, which is recorded rather than assumed.
                     """
