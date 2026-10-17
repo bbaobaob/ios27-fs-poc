@@ -90,6 +90,9 @@ public struct MatrixRunner: Sendable {
         var ioKitUserClients: IOKitUserClientOpenProbe.Result?
         var kernelObjectSurface: KernelObjectSurfaceProbe.Result?
         var privilegeAndSnapshot: PrivilegeAndSnapshotProbe.Result?
+        var kqueueProcessWatch: KqueueProcessWatchProbe.Result?
+        var symlinkAndRace: SymlinkAndRaceProbe.Result?
+        var sandboxExtension: SandboxExtensionProbe.Result?
 
         /// The matrix as it stands right now.
         ///
@@ -136,7 +139,10 @@ public struct MatrixRunner: Sendable {
                 spotlightEnumeration: spotlightEnumeration,
                 ioKitUserClients: ioKitUserClients,
                 kernelObjectSurface: kernelObjectSurface,
-                privilegeAndSnapshot: privilegeAndSnapshot
+                privilegeAndSnapshot: privilegeAndSnapshot,
+                kqueueProcessWatch: kqueueProcessWatch,
+                symlinkAndRace: symlinkAndRace,
+                sandboxExtension: sandboxExtension
             )
         }
 
@@ -329,6 +335,29 @@ public struct MatrixRunner: Sendable {
             // attributes, rename-exchange, and another process's descriptors.
             privilegeAndSnapshot = PrivilegeAndSnapshotProbe.probe()
             reportProgress("privilege-and-snapshot")
+
+            // kqueue is a second, independent observation surface: process
+            // introspection has been measured through proc_* and Mach, but
+            // never through the event queue, and EVFILT_PROC on a foreign pid
+            // is a different predicate from reading its path.
+            kqueueProcessWatch = KqueueProcessWatchProbe.probe()
+            reportProgress("kqueue-process-watch")
+
+            // The race class. Plain read/write/rename/link are all measured;
+            // the *at variants, O_NOFOLLOW, and linkat's flag matrix are
+            // where a path check can be separated from the operation it
+            // authorized, and that separation is what every historical
+            // filesystem sandbox escape has used.
+            symlinkAndRace = SymlinkAndRaceProbe.probe()
+            reportProgress("symlink-and-race")
+
+            // The sharpest question in the project: not "can the app reach
+            // this path" but "can the app MANUFACTURE A CREDENTIAL for it".
+            // A sandbox extension's whole purpose is to carry authority
+            // across a boundary, so minting one for a path outside the
+            // container would be a boundary violation by construction.
+            sandboxExtension = SandboxExtensionProbe.probe()
+            reportProgress("sandbox-extension")
         }
 
         return CapabilityMatrix(
@@ -368,7 +397,10 @@ public struct MatrixRunner: Sendable {
             spotlightEnumeration: spotlightEnumeration,
             ioKitUserClients: ioKitUserClients,
             kernelObjectSurface: kernelObjectSurface,
-            privilegeAndSnapshot: privilegeAndSnapshot
+            privilegeAndSnapshot: privilegeAndSnapshot,
+            kqueueProcessWatch: kqueueProcessWatch,
+            symlinkAndRace: symlinkAndRace,
+            sandboxExtension: sandboxExtension
         )
     }
 }

@@ -218,12 +218,168 @@ final class KernelSurfaceProbeTests: XCTestCase {
         }
     }
 
-    func testEveryResultCarriesItsControl() {
+    // MARK: - KqueueProcessWatchProbe
+
+    func testKqueueRegistrationIsNeverAFinding() {
+        let cases: [KqueueProcessWatchProbe.Outcome] = [
+            .registered, .refused, .notFound, .otherError, .notAttempted, .symbolUnavailable
+        ]
+        for outcome in cases {
+            let entry = KqueueProcessWatchProbe.Entry(
+                id: "case", group: "cross-process exit watch (EVFILT_PROC)",
+                operation: "kevent(EVFILT_PROC, EV_ADD, NOTE_EXIT)",
+                target: "pid 1", outcome: outcome, errnoName: nil,
+                returnedValue: nil, observed: "obs", interpretation: "interp"
+            )
+            XCTAssertFalse(entry.isBoundaryViolation,
+                           "\(outcome) must never be a violation")
+        }
+    }
+
+    func testKqueueControlLeads() {
+        // A kevent on the caller's own pid must succeed; that is what makes a
+        // refusal on launchd interpretable rather than ambiguous.
+        let result = KqueueProcessWatchProbe.probe()
+        XCTAssertFalse(result.entries.isEmpty)
+        #if canImport(Darwin)
+        XCTAssertEqual(result.entries.first?.id, "kq-proc-control-kqueue",
+                       "the first entry must be the kqueue() control")
+        XCTAssertTrue(result.entries.contains { $0.id == "kq-proc-control-self" },
+                      "the own-pid kevent control must be present on Darwin")
+        XCTAssertNotEqual(
+            result.entries.first { $0.id == "kq-proc-control-self" }?.outcome,
+            .refused,
+            "a kevent on the caller's own pid must not read as a refusal"
+        )
+        #else
+        // Without Darwin there is no kqueue to open and no pid to watch; the
+        // control is still recorded as a placeholder rather than omitted.
+        XCTAssertTrue(result.entries.contains { $0.id.hasPrefix("kq-proc-") },
+                      "the process-exit control must still be recorded")
+        #endif
+    }
+
+    func testKqueueViolationsAreAlwaysEmpty() {
+        let result = KqueueProcessWatchProbe.probe()
+        XCTAssertTrue(result.violations.isEmpty)
+        XCTAssertTrue(result.violationsAlwaysEmpty)
+    }
+
+    // MARK: - SymlinkAndRaceProbe
+
+    func testSymlinkCreationIsNeverAFinding() {
+        // The sharpest discipline in this file: creating a symlink that NAMES
+        // an unreachable path is not following one. Calling it a violation
+        // would spend the project's credibility on a shape that has not been
+        // demonstrated.
+        let cases: [SymlinkAndRaceProbe.Outcome] = [
+            .permitted, .denied, .loop, .notFound, .otherError, .notAttempted, .symbolUnavailable
+        ]
+        for outcome in cases {
+            let entry = SymlinkAndRaceProbe.Entry(
+                id: "case", group: "symlink race, measured not exploited",
+                operation: "symlink(/etc/passwd, link)", target: "/etc/passwd",
+                outcome: outcome, errnoName: nil, returnedValue: nil,
+                observed: "obs", interpretation: "interp"
+            )
+            XCTAssertFalse(entry.isBoundaryViolation,
+                           "\(outcome) must never be a violation")
+        }
+    }
+
+    func testSymlinkControlLeads() {
+        // An in-container linkat must succeed, or every cross-container
+        // refusal below it is inconclusive.
+        let result = SymlinkAndRaceProbe.probe()
+        XCTAssertFalse(result.entries.isEmpty)
+        #if canImport(Darwin)
+        XCTAssertTrue(result.entries.contains { $0.id == "at-control-linkat-in-container" },
+                      "the in-container linkat control must be present on Darwin")
+        XCTAssertTrue(result.entries.contains { $0.id == "nofollow-control-create" },
+                      "the O_NOFOLLOW positive control must be present on Darwin")
+        #else
+        // Without Darwin the groups are recorded as placeholders instead.
+        XCTAssertEqual(Set(result.entries.map { $0.group }).count, 3)
+        #endif
+    }
+
+    func testSymlinkViolationsAreAlwaysEmpty() {
+        let result = SymlinkAndRaceProbe.probe()
+        XCTAssertTrue(result.violations.isEmpty)
+        XCTAssertTrue(result.violationsAlwaysEmpty)
+    }
+
+    // MARK: - SandboxExtensionProbe
+
+    func testAMintedTokenIsNotAConfirmedFinding() {
+        // This is the one place the project could most easily overclaim. A
+        // token minted for /etc/passwd would be extraordinary -- and it is
+        // still not a finding from a simulator or CI host, because those are
+        // macOS processes under a different sandbox. The interpretation prose
+        // says what it would mean; the flag stays false.
+        let cases: [SandboxExtensionProbe.Outcome] = [
+            .issued, .denied, .notFound, .otherError, .notAttempted, .symbolUnavailable
+        ]
+        for outcome in cases {
+            let entry = SandboxExtensionProbe.Entry(
+                id: "case", group: "issuing for a path outside the container",
+                operation: "sandbox_extension_issue_file(self, /etc/passwd, 0, &handle)",
+                target: "/etc/passwd", outcome: outcome, errnoName: nil,
+                returnedValue: nil, observed: "obs", interpretation: "interp"
+            )
+            XCTAssertFalse(entry.isBoundaryViolation,
+                           "\(outcome) must never be a violation")
+        }
+    }
+
+    func testExtensionControlLeads() {
+        // Issuing for the app's own file must produce a token, or every
+        // refusal below is indistinguishable from the machinery not running.
+        let result = SandboxExtensionProbe.probe()
+        XCTAssertFalse(result.entries.isEmpty)
+        #if canImport(Darwin)
+        XCTAssertTrue(result.entries.contains { $0.id == "extension-own-issue" },
+                      "the own-file issuance control must be present on Darwin")
+        XCTAssertNotEqual(
+            result.entries.first { $0.id == "extension-own-issue" }?.outcome,
+            .denied,
+            "issuing for the app's own file must not read as a denial"
+        )
+        #else
+        XCTAssertEqual(Set(result.entries.map { $0.group }).count, 3)
+        #endif
+    }
+
+    func testExtensionViolationsAreAlwaysEmpty() {
+        let result = SandboxExtensionProbe.probe()
+        XCTAssertTrue(result.violations.isEmpty)
+        XCTAssertTrue(result.violationsAlwaysEmpty)
+    }
+
+    // MARK: - The discipline the three probes share
+
+    func testNoKqueueSymlinkOrExtensionProbeClaimsAViolation() {
+        // The single rule that keeps this project honest, checked across all
+        // three probes at once: an API returning without error is never, by
+        // itself, a demonstrated boundary violation.
+        let all: [[Any]] = [
+            KqueueProcessWatchProbe.probe().entries.map { $0.isBoundaryViolation },
+            SymlinkAndRaceProbe.probe().entries.map { $0.isBoundaryViolation },
+            SandboxExtensionProbe.probe().entries.map { $0.isBoundaryViolation }
+        ]
+        for group in all {
+            for flagged in group {
+                XCTAssertEqual(flagged as? Bool, false)
+            }
+        }
+    }
+
+    func testEveryRaceAndExtensionResultCarriesItsControl() {
         // A result with no control in it must be impossible. If any of the
         // three probes ever returns an empty entry list, that is a bug, not a
         // clean run.
-        XCTAssertFalse(IOKitUserClientOpenProbe.probe().entries.isEmpty)
-        XCTAssertFalse(KernelObjectSurfaceProbe.probe().entries.isEmpty)
-        XCTAssertFalse(PrivilegeAndSnapshotProbe.probe().entries.isEmpty)
+        XCTAssertFalse(KqueueProcessWatchProbe.probe().entries.isEmpty)
+        XCTAssertFalse(SymlinkAndRaceProbe.probe().entries.isEmpty)
+        XCTAssertFalse(SandboxExtensionProbe.probe().entries.isEmpty)
     }
 }

@@ -838,6 +838,76 @@ public enum ReportExporter {
             }
         }
 
+        if let kq = matrix.kqueueProcessWatch {
+            lines.append("")
+            lines.append("kqueue as a second observation surface:")
+            var lastGroup: String?
+            for item in kq.entries {
+                if item.group != lastGroup {
+                    lines.append("  -- \(item.group) --")
+                    lastGroup = item.group
+                }
+                lines.append("  [\(item.outcome.rawValue)] \(item.id)  \(item.target)")
+                if let err = item.errnoName { lines.append("      errno: \(err)") }
+                if let rv = item.returnedValue { lines.append("      returned: \(rv)") }
+                if let obs = item.observed { lines.append("      observed: \(obs)") }
+                lines.append("      result: \(item.interpretation)")
+            }
+            if kq.entries.isEmpty {
+                lines.append("  NOT_ATTEMPTED: no kqueue experiment ran.")
+            } else {
+                lines.append("  a registration is a request to be told later:")
+                lines.append("  nothing was observed, so nothing here is a finding")
+            }
+        }
+
+        if let sr = matrix.symlinkAndRace {
+            lines.append("")
+            lines.append("Symlink race and the *at family (check separated from use):")
+            var lastGroup: String?
+            for item in sr.entries {
+                if item.group != lastGroup {
+                    lines.append("  -- \(item.group) --")
+                    lastGroup = item.group
+                }
+                lines.append("  [\(item.outcome.rawValue)] \(item.id)  \(item.target)")
+                if let err = item.errnoName { lines.append("      errno: \(err)") }
+                if let rv = item.returnedValue { lines.append("      returned: \(rv)") }
+                if let obs = item.observed { lines.append("      observed: \(obs)") }
+                lines.append("      result: \(item.interpretation)")
+            }
+            if sr.entries.isEmpty {
+                lines.append("  NOT_ATTEMPTED: no symlink experiment ran.")
+            } else {
+                lines.append("  naming an unreachable path is not following one:")
+                lines.append("  the finding would be something following it")
+            }
+        }
+
+        if let se = matrix.sandboxExtension {
+            lines.append("")
+            lines.append("Can an ordinary app MINT a sandbox extension?")
+            var lastGroup: String?
+            for item in se.entries {
+                if item.group != lastGroup {
+                    lines.append("  -- \(item.group) --")
+                    lastGroup = item.group
+                }
+                lines.append("  [\(item.outcome.rawValue)] \(item.id)  \(item.target)")
+                if let err = item.errnoName { lines.append("      errno: \(err)") }
+                if let rv = item.returnedValue { lines.append("      returned: \(rv)") }
+                if let obs = item.observed { lines.append("      observed: \(obs)") }
+                lines.append("      result: \(item.interpretation)")
+            }
+            if se.entries.isEmpty {
+                lines.append("  NOT_ATTEMPTED: no extension experiment ran.")
+            } else {
+                lines.append("  a token's purpose is to carry authority the holder")
+                lines.append("  does not have; minting one for an outside path is the")
+                lines.append("  question, and only a stock device answer settles it")
+            }
+        }
+
         if let io = matrix.inodeOpen {
             lines.append("")
             lines.append("Open-by-inode (openbyid_np: no path traversal at all):")
@@ -977,6 +1047,9 @@ public enum ReportExporter {
         let ioKitUserClients: IOKitUserClientOpenProbe.Result?
         let kernelObjectSurface: KernelObjectSurfaceProbe.Result?
         let privilegeAndSnapshot: PrivilegeAndSnapshotProbe.Result?
+        let kqueueProcessWatch: KqueueProcessWatchProbe.Result?
+        let symlinkAndRace: SymlinkAndRaceProbe.Result?
+        let sandboxExtension: SandboxExtensionProbe.Result?
 
         init(matrix: CapabilityMatrix) {
             self.schema = "fsprobe.capability-matrix.v10"
@@ -1019,6 +1092,9 @@ public enum ReportExporter {
             self.ioKitUserClients = matrix.ioKitUserClients
             self.kernelObjectSurface = matrix.kernelObjectSurface
             self.privilegeAndSnapshot = matrix.privilegeAndSnapshot
+            self.kqueueProcessWatch = matrix.kqueueProcessWatch
+            self.symlinkAndRace = matrix.symlinkAndRace
+            self.sandboxExtension = matrix.sandboxExtension
         }
     }
 }

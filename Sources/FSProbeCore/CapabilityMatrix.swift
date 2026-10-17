@@ -97,6 +97,12 @@ public struct CapabilityMatrix: Sendable {
     public let kernelObjectSurface: KernelObjectSurfaceProbe.Result?
     /// Privilege primitives, APFS snapshots, xattrs, rename swap, foreign fds.
     public let privilegeAndSnapshot: PrivilegeAndSnapshotProbe.Result?
+    /// kqueue as a second, independent way to observe another process.
+    public let kqueueProcessWatch: KqueueProcessWatchProbe.Result?
+    /// The *at family, O_NOFOLLOW, and the symlink race.
+    public let symlinkAndRace: SymlinkAndRaceProbe.Result?
+    /// Whether an ordinary app can MINT a sandbox extension.
+    public let sandboxExtension: SandboxExtensionProbe.Result?
 
     /// Results of testing whether a user-granted scope is confined to what the
     /// user picked. Nil until the user grants access.
@@ -143,7 +149,10 @@ public struct CapabilityMatrix: Sendable {
         spotlightEnumeration: SpotlightEnumerationProbe.Result? = nil,
         ioKitUserClients: IOKitUserClientOpenProbe.Result? = nil,
         kernelObjectSurface: KernelObjectSurfaceProbe.Result? = nil,
-        privilegeAndSnapshot: PrivilegeAndSnapshotProbe.Result? = nil
+        privilegeAndSnapshot: PrivilegeAndSnapshotProbe.Result? = nil,
+        kqueueProcessWatch: KqueueProcessWatchProbe.Result? = nil,
+        symlinkAndRace: SymlinkAndRaceProbe.Result? = nil,
+        sandboxExtension: SandboxExtensionProbe.Result? = nil
     ) {
         self.results = results
         self.environment = environment
@@ -184,6 +193,9 @@ public struct CapabilityMatrix: Sendable {
         self.ioKitUserClients = ioKitUserClients
         self.kernelObjectSurface = kernelObjectSurface
         self.privilegeAndSnapshot = privilegeAndSnapshot
+        self.kqueueProcessWatch = kqueueProcessWatch
+        self.symlinkAndRace = symlinkAndRace
+        self.sandboxExtension = sandboxExtension
     }
 
     /// Platform context captured at run time.
