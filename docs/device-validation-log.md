@@ -231,3 +231,60 @@ Research into getting an IPA onto a physical iPhone with no Mac found:
 **Conclusion: there is no Android-only path.** Installing on the physical iPhone
 requires a macOS or Windows computer (Sideloadly), or a Linux/WSL computer with
 xtool. This is a platform requirement, not a limitation of the artifact.
+
+---
+
+## Round 11 — user clients, kernel objects, escape primitives, race class
+
+Six probes added; schema v10. Every one runs its control first and records
+`isBoundaryViolation == false`, so nothing below is a finding.
+
+### What the simulator answered (macOS process — artifacts, not iOS)
+
+**IOKit user clients:** of 477 visible services, 40 open attempts were made and
+**2 accepted a user client** — `IOPMrootDomain` and `USB2`. Both were closed
+immediately; no external method was called. First time the project went past
+enumeration to opening, and it is the reconnaissance the census existed to aim.
+
+**kqueue:** every `kevent` returned 0, including on **pid 1 (launchd)** and on
+**pid 0, which cannot exist**. That second result is the important one: the
+negative control was accepted, so the registration path is not validating
+`ident`, and the probe suspends its own process-watch claims for exactly that
+reason. A control that fails must disable its group, or a macOS artifact reads
+as an iOS finding.
+
+**`/dev/console` was permitted.** `/dev/kmem`, `/dev/mem`, `/dev/audit` were
+ENOENT. `/dev/ptmx` permitted, `/dev/tty` ENXIO.
+
+**`proc_pidfdinfo(1)` permitted** — another process's descriptors were readable
+on the host. Needs a device answer.
+
+**The `*at` family:** `renameat`/`unlinkat`/`mkdirat`/`renameatx_np` against
+`/etc/passwd` all answered **EACCES**, which is POSIX/SIP and *not* the seatbelt
+denial signature. Only `fchmodat` answered EPERM. `linkat` with
+AT_SYMLINK_FOLLOW answered **EINVAL even inside the container**, so its control
+failed and the cross-container row is inconclusive — the sandbox was never asked.
+
+**Sandbox extensions:** `sandbox_extension_issue_file` returned **EFAULT for
+every path, including a file that demonstrably exists inside the container.**
+EFAULT says the callee rejected an address, not that a path was refused, so this
+is a malformed call rather than an authorization answer — the extension-minting
+question is **UNANSWERED** on this host, not answered "no". The to-process
+variant crashed the app outright (EXC_BAD_ACCESS at 0x21da) and is recorded as
+not-attempted rather than retried with a guessed signature.
+
+**errno(47) and errno(93)** are **EAFNOSUPPORT** and **ENOATTR**, neither of
+which `ErrorClassifier` could name. An unnamed errno reads as "unexplained", and
+an unexplained result reads as interesting — so the gap in that table was itself
+a defect, and both are now named.
+
+### Two bugs this round found in the project's own code
+
+1. **`fcntl` bound as a fixed three-argument pointer.** `fcntl` is variadic; on
+   arm64e varargs are passed somewhere other than the fixed registers, so the
+   callee would have read a garbage buffer pointer. Replaced with `fgetpath`,
+   the non-variadic equivalent the platform provides for F_GETPATH.
+2. **`setxattr`/`removexattr` return C `int` while `getxattr`/`listxattr` return
+   `ssize_t`.** Two helpers inferred `Int32` against a declared `Int` and failed
+   the build with "type of expression is ambiguous" — a confusing way to be told
+   two POSIX calls disagree about width.
