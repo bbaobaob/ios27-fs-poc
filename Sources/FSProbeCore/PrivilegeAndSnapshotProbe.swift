@@ -752,11 +752,38 @@ public enum PrivilegeAndSnapshotProbe {
     // annotation the nested withCString closures cannot infer a type and the
     // build fails with "type of expression is ambiguous" -- which is a
     // confusing way to be told that two POSIX calls disagree about width.
+    //
+    // All five are resolved with dlsym rather than named, and the reason is
+    // the same one MachShim's header records: a @_silgen_name declaration
+    // occupies its symbol's name module-wide. MetadataReadProbe already binds
+    // `getxattr` and `listxattr`, so calling those names from here would
+    // resolve to THAT declaration and fail with a function-type mismatch. A
+    // symbol that cannot be resolved answers ENOSYS -- "function not
+    // implemented" -- which the caller records as unattempted rather than
+    // reading as a sandbox denial.
+    private typealias SetXAttrFn = @convention(c) (
+        UnsafePointer<CChar>, UnsafePointer<CChar>, UnsafeRawPointer?, Int, UInt32, Int32
+    ) -> Int32
+    private typealias GetXAttrFn = @convention(c) (
+        UnsafePointer<CChar>, UnsafePointer<CChar>, UnsafeMutableRawPointer?, Int, UInt32, Int32
+    ) -> Int
+    private typealias ListXAttrFn = @convention(c) (
+        UnsafePointer<CChar>, UnsafeMutableRawPointer?, Int, Int32
+    ) -> Int
+    private typealias RemoveXAttrFn = @convention(c) (
+        UnsafePointer<CChar>, UnsafePointer<CChar>, Int32
+    ) -> Int32
+
     private static func setXAttr(_ path: String, _ name: String, _ value: String) -> Int {
+        guard let sym = POSIXShim.lookupSymbol("setxattr") else {
+            setErrno(Int32(ENOSYS))
+            return -1
+        }
+        let fn = unsafeBitCast(sym, to: SetXAttrFn.self)
         let rc: Int32 = path.withCString { pathPtr in
             name.withCString { namePtr in
                 value.withCString { valuePtr in
-                    setxattr(pathPtr, namePtr, valuePtr, value.utf8.count, 0, 0)
+                    fn(pathPtr, namePtr, valuePtr, value.utf8.count, 0, 0)
                 }
             }
         }
@@ -764,10 +791,15 @@ public enum PrivilegeAndSnapshotProbe {
     }
 
     private static func getXAttr(_ path: String, _ name: String, _ buffer: inout [UInt8]) -> Int {
-        path.withCString { pathPtr in
+        guard let sym = POSIXShim.lookupSymbol("getxattr") else {
+            setErrno(Int32(ENOSYS))
+            return -1
+        }
+        let fn = unsafeBitCast(sym, to: GetXAttrFn.self)
+        return path.withCString { pathPtr in
             name.withCString { namePtr in
                 buffer.withUnsafeMutableBytes { raw in
-                    getxattr(pathPtr, namePtr, raw.baseAddress, raw.count, 0, 0)
+                    fn(pathPtr, namePtr, raw.baseAddress, raw.count, 0, 0)
                 }
             }
         }
@@ -775,25 +807,40 @@ public enum PrivilegeAndSnapshotProbe {
 
     /// The size-only form the /etc/passwd control uses: nil value, zero size.
     private static func getXAttrSizeOnly(_ path: String, _ name: String) -> Int {
-        path.withCString { pathPtr in
+        guard let sym = POSIXShim.lookupSymbol("getxattr") else {
+            setErrno(Int32(ENOSYS))
+            return -1
+        }
+        let fn = unsafeBitCast(sym, to: GetXAttrFn.self)
+        return path.withCString { pathPtr in
             name.withCString { namePtr in
-                getxattr(pathPtr, namePtr, nil, 0, 0, 0)
+                fn(pathPtr, namePtr, nil, 0, 0, 0)
             }
         }
     }
 
     private static func listXAttr(_ path: String, _ buffer: inout [UInt8]) -> Int {
-        path.withCString { pathPtr in
+        guard let sym = POSIXShim.lookupSymbol("listxattr") else {
+            setErrno(Int32(ENOSYS))
+            return -1
+        }
+        let fn = unsafeBitCast(sym, to: ListXAttrFn.self)
+        return path.withCString { pathPtr in
             buffer.withUnsafeMutableBytes { raw in
-                listxattr(pathPtr, raw.baseAddress, raw.count, 0)
+                fn(pathPtr, raw.baseAddress, raw.count, 0)
             }
         }
     }
 
     private static func removeXAttr(_ path: String, _ name: String) -> Int {
+        guard let sym = POSIXShim.lookupSymbol("removexattr") else {
+            setErrno(Int32(ENOSYS))
+            return -1
+        }
+        let fn = unsafeBitCast(sym, to: RemoveXAttrFn.self)
         let rc: Int32 = path.withCString { pathPtr in
             name.withCString { namePtr in
-                removexattr(pathPtr, namePtr, 0)
+                fn(pathPtr, namePtr, 0)
             }
         }
         return Int(rc)

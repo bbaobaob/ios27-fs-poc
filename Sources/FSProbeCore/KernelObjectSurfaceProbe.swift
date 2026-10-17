@@ -744,8 +744,8 @@ public enum KernelObjectSurfaceProbe {
         let pairErr = pairRC >= 0 ? 0 : currentErrno()
         var pairObserved: String
         if pairRC == 0 {
-            let c0 = close(fds[0])
-            let c1 = close(fds[1])
+            let c0 = POSIXShim.closeFile(fds[0])
+            let c1 = POSIXShim.closeFile(fds[1])
             pairObserved = "socketpair(AF_UNIX, SOCK_STREAM) returned two fds [\(fds[0]), \(fds[1])]; both closed (\(c0), \(c1))"
         } else {
             pairObserved = "socketpair(AF_UNIX, SOCK_STREAM) returned -1, errno=\(ErrorClassifier.errnoName(pairErr))"
@@ -788,7 +788,7 @@ public enum KernelObjectSurfaceProbe {
         let err = fd >= 0 ? 0 : currentErrno()
         var observed: String
         if fd >= 0 {
-            let closeRC = close(fd)
+            let closeRC = POSIXShim.closeFile(fd)
             observed = "socket() returned fd \(fd); closed immediately (\(closeRC))"
         } else {
             observed = "socket() returned -1, errno=\(ErrorClassifier.errnoName(err))"
